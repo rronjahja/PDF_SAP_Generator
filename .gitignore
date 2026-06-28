@@ -1,0 +1,11 @@
+app/designer/node_modules
+app/designer/dist
+app/designer/dist/
+app/designer/dist/*
+app/designer/dist/assets
+
+
+gen
+mta_archives
+node_modules
+

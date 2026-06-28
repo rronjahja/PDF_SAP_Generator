@@ -1,0 +1,193 @@
+{
+  "page": {
+    "format": "A4",
+    "orientation": "portrait",
+    "margin": {
+      "top": 30,
+      "right": 30,
+      "bottom": 30,
+      "left": 30
+    }
+  },
+  "windows": [
+    {
+      "id": "A",
+      "name": "Header",
+      "type": "HEADER",
+      "x": 30,
+      "y": 20,
+      "width": 535,
+      "height": 90,
+      "repeatOnEveryPage": true,
+      "elements": [
+        {
+          "id": "documentTitle",
+          "type": "TEXT",
+          "x": 350,
+          "y": 10,
+          "width": 180,
+          "height": 30,
+          "text": "Invoice",
+          "fontSize": 22,
+          "bold": true
+        },
+        {
+          "id": "companyName",
+          "type": "TEXT",
+          "x": 0,
+          "y": 10,
+          "width": 250,
+          "height": 25,
+          "binding": "company.name",
+          "fontSize": 12
+        }
+      ]
+    },
+    {
+      "id": "B",
+      "name": "Customer Address",
+      "type": "ADDRESS",
+      "x": 30,
+      "y": 130,
+      "width": 300,
+      "height": 100,
+      "elements": [
+        {
+          "id": "customerName",
+          "type": "TEXT",
+          "binding": "customer.name"
+        },
+        {
+          "id": "customerStreet",
+          "type": "TEXT",
+          "binding": "customer.street"
+        },
+        {
+          "id": "customerCity",
+          "type": "TEXT",
+          "binding": "customer.city"
+        }
+      ]
+    },
+    {
+      "id": "C",
+      "name": "Invoice Metadata",
+      "type": "METADATA",
+      "x": 360,
+      "y": 130,
+      "width": 200,
+      "height": 100,
+      "elements": [
+        {
+          "id": "invoiceNumber",
+          "type": "TEXT",
+          "label": "Invoice No.",
+          "binding": "invoice.number"
+        },
+        {
+          "id": "invoiceDate",
+          "type": "TEXT",
+          "label": "Date",
+          "binding": "invoice.date",
+          "format": "date"
+        }
+      ]
+    },
+    {
+      "id": "D",
+      "name": "Items",
+      "type": "TABLE",
+      "x": 30,
+      "y": 270,
+      "width": 535,
+      "height": 300,
+      "binding": "items",
+      "repeatHeader": true,
+      "columns": [
+        {
+          "label": "Material",
+          "binding": "material",
+          "width": 80
+        },
+        {
+          "label": "Description",
+          "binding": "description",
+          "width": 220
+        },
+        {
+          "label": "Qty",
+          "binding": "quantity",
+          "width": 60
+        },
+        {
+          "label": "Price",
+          "binding": "price",
+          "width": 80,
+          "format": "currency"
+        },
+        {
+          "label": "Total",
+          "binding": "total",
+          "width": 95,
+          "format": "currency"
+        }
+      ]
+    },
+    {
+      "id": "F",
+      "name": "Totals",
+      "type": "TOTALS",
+      "x": 360,
+      "y": 600,
+      "width": 200,
+      "height": 100,
+      "elements": [
+        {
+          "id": "netAmount",
+          "type": "TEXT",
+          "label": "Net",
+          "binding": "totals.net",
+          "format": "currency"
+        },
+        {
+          "id": "vatAmount",
+          "type": "TEXT",
+          "label": "VAT",
+          "binding": "totals.vat",
+          "format": "currency"
+        },
+        {
+          "id": "grossAmount",
+          "type": "TEXT",
+          "label": "Gross",
+          "binding": "totals.gross",
+          "format": "currency",
+          "bold": true
+        }
+      ]
+    },
+    {
+      "id": "Z",
+      "name": "Footer",
+      "type": "FOOTER",
+      "x": 30,
+      "y": 760,
+      "width": 535,
+      "height": 60,
+      "repeatOnEveryPage": true,
+      "elements": [
+        {
+          "id": "footerText",
+          "type": "TEXT",
+          "binding": "company.footerText",
+          "fontSize": 9
+        },
+        {
+          "id": "pageNumber",
+          "type": "PAGE_NUMBER",
+          "text": "Page {{page}} of {{pages}}"
+        }
+      ]
+    }
+  ]
+}

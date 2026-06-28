@@ -1,0 +1,64 @@
+_schema-version: "3.2"
+ID: pdf-form-builder
+version: 1.0.0
+description: SAP BTP drag-and-drop PDF form builder and generation API
+
+parameters:
+  enable-parallel-deployments: true
+
+build-parameters:
+  before-all:
+    - builder: custom
+      commands:
+        - npm ci
+        - npm run build:designer
+        - npx cds build --production
+
+modules:
+  # ── CAP service: OData design-time API, runtime REST API, and the designer UI ──
+  - name: pdf-form-builder-srv
+    type: nodejs
+    path: gen/srv
+    parameters:
+      buildpack: nodejs_buildpack
+      memory: 1024M
+      disk-quota: 2048M
+      # Chromium for PDF rendering is resolved via @sparticuz/chromium at runtime;
+      # alternatively set PDF_CHROMIUM_PATH to a sidecar/buildpack-provided binary.
+    build-parameters:
+      builder: npm
+      ignore: ["node_modules/", ".env"]
+    properties:
+      PDF_STORE_DOCUMENTS: "true"
+      # PDF_RATE_LIMIT: "60"          # optional: generations per minute per tenant
+      # PDF_API_KEY: set via 'cf set-env' or a user-provided service, never in git
+    provides:
+      - name: srv-api
+        properties:
+          srv-url: ${default-url}
+    requires:
+      - name: pdf-form-builder-db
+      - name: pdf-form-builder-uaa
+
+  # ── HDI deployer: creates the HANA tables from the CDS model ──
+  - name: pdf-form-builder-db-deployer
+    type: hdb
+    path: gen/db
+    parameters:
+      buildpack: nodejs_buildpack
+    requires:
+      - name: pdf-form-builder-db
+
+resources:
+  - name: pdf-form-builder-db
+    type: com.sap.xs.hdi-container
+    parameters:
+      service: hana
+      service-plan: hdi-shared
+
+  - name: pdf-form-builder-uaa
+    type: org.cloudfoundry.managed-service
+    parameters:
+      service: xsuaa
+      service-plan: application
+      path: ./xs-security.json

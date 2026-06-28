@@ -1,0 +1,59 @@
+{
+  "name": "pdf-form-builder",
+  "version": "1.0.0",
+  "description": "SAP BTP drag-and-drop PDF form builder and generation API (CAP Node.js)",
+  "repository": "<repository url>",
+  "license": "UNLICENSED",
+  "private": true,
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@cap-js/hana": "^1",
+    "@cap-js/sqlite": "^1",
+    "@sap/cds": "^8",
+    "@sap/xssec": "^4",
+    "basic-ftp": "^6.0.1",
+    "bwip-js": "^4.11.1",
+    "express": "^4",
+    "handlebars": "^4",
+    "playwright": "^1",
+    "qrcode": "^1.5.4",
+    "ssh2-sftp-client": "^12.1.1",
+    "uuid": "^9"
+  },
+  "devDependencies": {
+    "@cap-js/cds-types": "^0.9.0",
+    "@sap/cds-dk": "^9.9.2",
+    "ftp-srv": "^4.6.3"
+  },
+  "scripts": {
+    "start": "cds-serve",
+    "watch": "cds watch",
+    "test": "node --test test/*.test.js",
+    "build:designer": "cd app/designer && npm ci && npx vite build"
+  },
+  "cds": {
+    "requires": {
+      "[development]": {
+        "auth": {
+          "kind": "dummy"
+        }
+      },
+      "[production]": {
+        "db": {
+          "kind": "hana"
+        },
+        "auth": {
+          "kind": "xsuaa"
+        }
+      }
+    },
+    "server": {
+      "index": true
+    }
+  },
+  "optionalDependencies": {
+    "@sparticuz/chromium": "^149.0.0"
+  }
+}

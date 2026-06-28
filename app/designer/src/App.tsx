@@ -1,0 +1,205 @@
+import { useCallback, useEffect, useState } from 'react';
+import { createTemplate, deleteTemplate, duplicateTemplate, listTemplates } from './api';
+import type { Template } from './types';
+import { Designer } from './components/Designer';
+import { DestinationsView } from './components/DestinationsView';
+import { DocumentsView } from './components/DocumentsView';
+import { TemplateSettingsModal } from './components/TemplateSettingsModal';
+
+/* ── Toasts ─────────────────────────────────────────────────────────── */
+export interface Toast {
+  id: number;
+  kind: 'info' | 'success' | 'error';
+  text: string;
+  detail?: string;
+}
+let toastSeq = 0;
+
+export type Notify = (kind: Toast['kind'], text: string, detail?: string) => void;
+
+function Toasts({ toasts }: { toasts: Toast[] }) {
+  return (
+    <div className="toasts" role="status" aria-live="polite">
+      {toasts.map((t) => (
+        <div key={t.id} className={`toast ${t.kind}`}>
+          {t.text}
+          {t.detail && <div className="toast-detail">{t.detail}</div>}
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/* ── Template list ──────────────────────────────────────────────────── */
+function TemplateList({
+  onOpen,
+  notify
+}: {
+  onOpen: (id: string) => void;
+  notify: Notify;
+}) {
+  const [templates, setTemplates] = useState<Template[] | null>(null);
+  const [name, setName] = useState('');
+  const [docType, setDocType] = useState('INVOICE');
+  const [busy, setBusy] = useState(false);
+  const [settingsFor, setSettingsFor] = useState<Template | null>(null);
+
+  const reload = useCallback(() => {
+    listTemplates()
+      .then(setTemplates)
+      .catch((e) => notify('error', 'Could not load templates', e.message));
+  }, [notify]);
+
+  useEffect(reload, [reload]);
+
+  const create = async () => {
+    if (!name.trim()) return;
+    setBusy(true);
+    try {
+      const t = await createTemplate(name.trim(), docType);
+      notify('success', `Template "${t.name}" created`);
+      onOpen(t.ID);
+    } catch (e) {
+      notify('error', 'Create failed', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const duplicate = async (id: string) => {
+    try {
+      const copy = await duplicateTemplate(id);
+      notify('success', `Duplicated as "${copy.name}"`);
+      reload();
+    } catch (e) {
+      notify('error', 'Duplicate failed', (e as Error).message);
+    }
+  };
+
+  const remove = async (t: Template) => {
+    if (!window.confirm(`Delete template "${t.name}" and all its versions?`)) return;
+    try {
+      await deleteTemplate(t.ID);
+      notify('success', `Template "${t.name}" deleted`);
+      reload();
+    } catch (e) {
+      notify('error', 'Delete failed', (e as Error).message);
+    }
+  };
+
+  return (
+    <div className="list-page">
+      <div className="list-head">
+        <div style={{ flex: 1 }}>
+          <h1>Form templates</h1>
+          <p className="sub">Design a layout, bind your data, publish, generate PDFs.</p>
+        </div>
+      </div>
+
+      <div className="new-form">
+        <input
+          placeholder="New template name, e.g. invoice-standard"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && create()}
+          style={{ flex: 1 }}
+        />
+        <select value={docType} onChange={(e) => setDocType(e.target.value)}>
+          {['INVOICE', 'PURCHASE_ORDER', 'DELIVERY_NOTE', 'QUOTATION', 'REPORT', 'CERTIFICATE'].map(
+            (t) => (
+              <option key={t}>{t}</option>
+            )
+          )}
+        </select>
+        <button className="primary" onClick={create} disabled={busy || !name.trim()}>
+          Create template
+        </button>
+      </div>
+
+      {templates === null && <p className="muted">Loading…</p>}
+      {templates && templates.length === 0 && (
+        <div className="empty">No templates yet. Create your first one above.</div>
+      )}
+      {templates?.map((t) => {
+        const versions = t.versions ?? [];
+        const published = versions.find((v) => v.status === 'PUBLISHED');
+        return (
+          <div className="tpl-card" key={t.ID}>
+            <div className="tpl-thumb" aria-hidden="true" />
+            <div className="tpl-main">
+              <div className="tpl-name">{t.name}</div>
+              <div className="tpl-meta">
+                {t.documentType ?? '—'} · {versions.length} version{versions.length === 1 ? '' : 's'}
+                {published ? ` · v${published.version} published` : ' · nothing published yet'}
+              </div>
+            </div>
+            <span className={`chip ${t.status}`}>{t.status}</span>
+            <div className="tpl-actions">
+              <button className="primary" onClick={() => onOpen(t.ID)}>
+                Open designer
+              </button>
+              <button onClick={() => setSettingsFor(t)} title="File name pattern, delivery, locale">⚙ Settings</button>
+              <button onClick={() => duplicate(t.ID)}>Duplicate</button>
+              <button className="danger" onClick={() => remove(t)}>
+                Delete
+              </button>
+            </div>
+          </div>
+        );
+      })}
+      {settingsFor && (
+        <TemplateSettingsModal
+          template={settingsFor}
+          notify={notify}
+          onClose={(changed) => {
+            setSettingsFor(null);
+            if (changed) reload();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+/* ── App shell ──────────────────────────────────────────────────────── */
+export default function App() {
+  const [view, setView] = useState<
+    { page: 'list' } | { page: 'designer'; id: string } | { page: 'destinations' } | { page: 'documents' }
+  >({ page: 'list' });
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const notify: Notify = useCallback((kind, text, detail) => {
+    const id = ++toastSeq;
+    setToasts((ts) => [...ts, { id, kind, text, detail }]);
+    window.setTimeout(() => setToasts((ts) => ts.filter((t) => t.id !== id)), 5200);
+  }, []);
+
+  return (
+    <div className="shell">
+      {view.page === 'list' ? (
+        <>
+          <div className="toolbar">
+            <span className="brand">
+              PDF Form Designer <span className="pt">A4 · 595×842pt</span>
+            </span>
+            <span className="spacer" />
+            <button onClick={() => setView({ page: 'documents' })}>Documents</button>
+            <button onClick={() => setView({ page: 'destinations' })}>Destinations</button>
+          </div>
+          <TemplateList onOpen={(id) => setView({ page: 'designer', id })} notify={notify} />
+        </>
+      ) : view.page === 'destinations' ? (
+        <DestinationsView onBack={() => setView({ page: 'list' })} notify={notify} />
+      ) : view.page === 'documents' ? (
+        <DocumentsView onBack={() => setView({ page: 'list' })} notify={notify} />
+      ) : (
+        <Designer
+          templateId={view.id}
+          onBack={() => setView({ page: 'list' })}
+          notify={notify}
+        />
+      )}
+      <Toasts toasts={toasts} />
+    </div>
+  );
+}

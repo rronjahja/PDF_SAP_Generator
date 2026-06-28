@@ -1,0 +1,37 @@
+{
+  "company": {
+    "name": "Example GmbH",
+    "footerText": "Example GmbH | Frankfurt am Main | VAT ID: DE123456789"
+  },
+  "customer": {
+    "name": "Musterkunde GmbH",
+    "street": "Mainzer Landstraße 10",
+    "city": "60329 Frankfurt am Main"
+  },
+  "invoice": {
+    "number": "9000001234",
+    "date": "2026-06-03",
+    "currency": "EUR"
+  },
+  "items": [
+    {
+      "material": "MAT-100",
+      "description": "Consulting Service",
+      "quantity": 5,
+      "price": 100,
+      "total": 500
+    },
+    {
+      "material": "MAT-200",
+      "description": "Development Service",
+      "quantity": 3,
+      "price": 150,
+      "total": 450
+    }
+  ],
+  "totals": {
+    "net": 950,
+    "vat": 180.5,
+    "gross": 1130.5
+  }
+}

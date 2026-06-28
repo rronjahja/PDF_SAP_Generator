@@ -1,0 +1,7 @@
+{
+  "log": {
+    "levels": {
+      "sqlite": "warn"
+    }
+  }
+}
