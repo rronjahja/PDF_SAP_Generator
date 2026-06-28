@@ -1,5 +1,5 @@
 'use strict';
-
+require('./lib/seed-demo-documents');
 /**
  * Custom CAP server
  *
@@ -16,6 +16,7 @@
  */
 
 const cds = require('@sap/cds');
+
 const generation = require('./lib/generation');
 const { sendError, AppError } = require('./lib/errors');
 const { INSERT, SELECT } = require('@sap/cds').ql;

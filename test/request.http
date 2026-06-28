@@ -1,0 +1,58 @@
+@baseUrl = http://localhost:4004
+
+### Generate an invoice PDF
+POST {{baseUrl}}/api/v1/templates/invoice-standard/generate
+Content-Type: application/json
+
+{
+  "version": "latest",
+  "returnMode": "base64",
+  "fileName": "invoice-9000001234.pdf",
+  "data": {
+    "company": {
+      "name": "Example GmbH",
+      "footerText": "Example GmbH | Frankfurt am Main | VAT ID: DE123456789"
+    },
+    "customer": {
+      "name": "Musterkunde GmbH",
+      "street": "Mainzer Landstraße 10",
+      "city": "60329 Frankfurt am Main"
+    },
+    "invoice": {
+      "number": "9000001234",
+      "date": "2026-06-03",
+      "currency": "EUR"
+    },
+    "items": [
+      { "material": "MAT-100", "description": "Consulting Service", "quantity": 5, "price": 100, "total": 500 },
+      { "material": "MAT-200", "description": "Development Service", "quantity": 3, "price": 150, "total": 450 }
+    ],
+    "totals": {
+      "net": 950,
+      "vat": 180.5,
+      "gross": 1130.5
+    }
+  }
+}
+
+### Validate data without generating (handy for checking field names)
+POST {{baseUrl}}/api/v1/templates/invoice-standard/validate
+Content-Type: application/json
+
+{
+  "data": {
+    "company": { "name": "Example GmbH" },
+    "customer": { "name": "Musterkunde GmbH", "street": "Mainzer Landstraße 10", "city": "60329 Frankfurt am Main" },
+    "invoice": { "number": "9000001234", "date": "2026-06-03", "currency": "EUR" },
+    "items": [{ "material": "MAT-100", "description": "Consulting Service", "quantity": 5, "price": 100, "total": 500 }],
+    "totals": { "net": 950, "vat": 180.5, "gross": 1130.5 }
+  }
+}
+
+###
+GET {{baseUrl}}/api/v1/documents/{documentId}/download
+
+###
+GET {{baseUrl}}/api/v1/documents/a1d0c0de-0001-4a1a-9aaa-000000000001/download
+###
+GET {{baseUrl}}/api/v1/documents/a1d0c0de-0002-4b2b-9bbb-000000000002/download
