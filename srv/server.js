@@ -1,5 +1,5 @@
 'use strict';
-require('./lib/seed-demo-documents');
+require('./lib/seed-demo-templates');
 /**
  * Custom CAP server
  *
@@ -170,7 +170,8 @@ cds.on('bootstrap', (app) => {
         buf = Buffer.concat(chunks);
       }
       res.set('Content-Type', doc.mimeType || 'application/pdf');
-      res.set('Content-Disposition', `attachment; filename="${(doc.fileName || 'document.pdf').replace(/"/g, '')}"`);
+      const disposition = req.query.inline ? 'inline' : 'attachment';
+      res.set('Content-Disposition', `${disposition}; filename="${(doc.fileName || 'document.pdf').replace(/"/g, '')}"`);
       res.send(buf);
     } catch (err) {
       sendError(res, err);

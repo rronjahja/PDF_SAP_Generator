@@ -1,0 +1,99 @@
+{
+  "page": { "format": "A4", "orientation": "portrait", "margin": { "top": 30, "right": 30, "bottom": 30, "left": 30 }, "background": "#FFFFFF" },
+  "windows": [
+    {
+      "id": "A", "name": "Header", "type": "HEADER", "x": 0, "y": 0, "width": 595, "height": 96,
+      "background": "#0B2545", "repeatOnEveryPage": true,
+      "elements": [
+        { "id": "logoBox", "type": "RECTANGLE", "x": 40, "y": 30, "width": 36, "height": 36, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "logoM", "type": "TEXT", "text": "M", "x": 40, "y": 34, "width": 36, "height": 30, "fontSize": 20, "bold": true, "alignment": "center", "color": "#0B2545" },
+        { "id": "company", "type": "TEXT", "binding": "company.name", "x": 88, "y": 30, "width": 320, "fontSize": 18, "bold": true, "color": "#FFFFFF" },
+        { "id": "tag", "type": "TEXT", "text": "INTERNATIONAL FREIGHT FORWARDING", "x": 89, "y": 56, "fontSize": 8, "color": "#9FB3C8" },
+        { "id": "title", "type": "TEXT", "text": "COMMERCIAL INVOICE", "x": 300, "y": 38, "width": 255, "fontSize": 14, "bold": true, "alignment": "right", "color": "#FFFFFF" },
+        { "id": "stripe", "type": "RECTANGLE", "x": 0, "y": 90, "width": 595, "height": 6, "fill": "#FB8500", "borderWidth": 0 }
+      ]
+    },
+    {
+      "id": "CARDS", "name": "Metadata", "type": "FREE_SECTION", "x": 40, "y": 118, "width": 515, "height": 54,
+      "elements": [
+        { "id": "c1bg", "type": "RECTANGLE", "x": 0, "y": 0, "width": 120, "height": 54, "fill": "#EEF2F6", "cornerRadius": 4, "borderWidth": 0 },
+        { "id": "c1top", "type": "RECTANGLE", "x": 0, "y": 0, "width": 120, "height": 3, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "c1l", "type": "TEXT", "text": "INVOICE NO.", "x": 10, "y": 12, "fontSize": 7, "bold": true, "color": "#6B7785" },
+        { "id": "c1v", "type": "TEXT", "binding": "invoice.number", "x": 10, "y": 27, "width": 100, "fontSize": 11, "bold": true, "color": "#0B2545" },
+
+        { "id": "c2bg", "type": "RECTANGLE", "x": 132, "y": 0, "width": 120, "height": 54, "fill": "#EEF2F6", "cornerRadius": 4, "borderWidth": 0 },
+        { "id": "c2top", "type": "RECTANGLE", "x": 132, "y": 0, "width": 120, "height": 3, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "c2l", "type": "TEXT", "text": "DATE", "x": 142, "y": 12, "fontSize": 7, "bold": true, "color": "#6B7785" },
+        { "id": "c2v", "type": "TEXT", "binding": "invoice.date", "format": "date", "x": 142, "y": 27, "width": 100, "fontSize": 11, "bold": true, "color": "#0B2545" },
+
+        { "id": "c3bg", "type": "RECTANGLE", "x": 264, "y": 0, "width": 120, "height": 54, "fill": "#EEF2F6", "cornerRadius": 4, "borderWidth": 0 },
+        { "id": "c3top", "type": "RECTANGLE", "x": 264, "y": 0, "width": 120, "height": 3, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "c3l", "type": "TEXT", "text": "PO NUMBER", "x": 274, "y": 12, "fontSize": 7, "bold": true, "color": "#6B7785" },
+        { "id": "c3v", "type": "TEXT", "binding": "invoice.poNumber", "x": 274, "y": 27, "width": 100, "fontSize": 11, "bold": true, "color": "#0B2545" },
+
+        { "id": "c4bg", "type": "RECTANGLE", "x": 396, "y": 0, "width": 119, "height": 54, "fill": "#EEF2F6", "cornerRadius": 4, "borderWidth": 0 },
+        { "id": "c4top", "type": "RECTANGLE", "x": 396, "y": 0, "width": 119, "height": 3, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "c4l", "type": "TEXT", "text": "INCOTERMS", "x": 406, "y": 12, "fontSize": 7, "bold": true, "color": "#6B7785" },
+        { "id": "c4v", "type": "TEXT", "binding": "invoice.incoterms", "x": 406, "y": 27, "width": 100, "fontSize": 11, "bold": true, "color": "#0B2545" }
+      ]
+    },
+    {
+      "id": "SF", "name": "Ship From", "type": "ADDRESS", "x": 40, "y": 190, "width": 250, "height": 66,
+      "elements": [
+        { "id": "sfLabel", "type": "TEXT", "text": "SHIP FROM", "fontSize": 8, "bold": true, "color": "#FB8500" },
+        { "id": "sfName", "type": "TEXT", "binding": "company.name", "fontSize": 11, "bold": true },
+        { "id": "sfL1", "type": "TEXT", "binding": "shipFrom.line1" },
+        { "id": "sfL2", "type": "TEXT", "binding": "shipFrom.line2" }
+      ]
+    },
+    {
+      "id": "ST", "name": "Ship To", "type": "ADDRESS", "x": 310, "y": 190, "width": 250, "height": 66,
+      "elements": [
+        { "id": "stLabel", "type": "TEXT", "text": "SHIP TO", "fontSize": 8, "bold": true, "color": "#FB8500" },
+        { "id": "stName", "type": "TEXT", "binding": "shipTo.name", "fontSize": 11, "bold": true },
+        { "id": "stL1", "type": "TEXT", "binding": "shipTo.line1" },
+        { "id": "stL2", "type": "TEXT", "binding": "shipTo.line2" }
+      ]
+    },
+    {
+      "id": "D", "name": "Items", "type": "TABLE", "x": 40, "y": 270, "width": 515, "height": 200,
+      "binding": "items", "repeatHeader": true,
+      "columns": [
+        { "label": "Service / Description", "binding": "description", "width": 225 },
+        { "label": "Weight", "binding": "weight", "width": 70, "align": "right" },
+        { "label": "Qty", "binding": "quantity", "width": 40, "align": "right" },
+        { "label": "Rate", "binding": "rate", "width": 80, "format": "currency" },
+        { "label": "Amount", "binding": "amount", "width": 100, "format": "currency" }
+      ]
+    },
+    {
+      "id": "F", "name": "Totals", "type": "TOTALS", "x": 330, "y": 485, "width": 225, "height": 70,
+      "elements": [
+        { "id": "sub", "type": "TEXT", "label": "Subtotal", "binding": "totals.net", "format": "currency" },
+        { "id": "tax", "type": "TEXT", "label": "Duties & taxes", "binding": "totals.vat", "format": "currency" },
+        { "id": "tot", "type": "TEXT", "label": "Total (USD)", "binding": "totals.gross", "format": "currency", "bold": true }
+      ]
+    },
+    {
+      "id": "TRK", "name": "Tracking", "type": "FREE_SECTION", "x": 40, "y": 585, "width": 515, "height": 110,
+      "background": "#EEF2F6", "cornerRadius": 6,
+      "elements": [
+        { "id": "bar", "type": "RECTANGLE", "x": 0, "y": 0, "width": 5, "height": 110, "fill": "#FB8500", "borderWidth": 0 },
+        { "id": "trkTitle", "type": "TEXT", "text": "SHIPMENT TRACKING", "x": 22, "y": 14, "fontSize": 9, "bold": true, "color": "#0B2545" },
+        { "id": "qr", "type": "QR_CODE", "binding": "shipment.trackingUrl", "x": 22, "y": 32, "width": 66, "height": 66 },
+        { "id": "trkInfo", "type": "TEXT", "text": "Scan for live status and ETA at the destination terminal.", "x": 100, "y": 34, "width": 185, "fontSize": 8.5, "color": "#555555" },
+        { "id": "trkNoLbl", "type": "TEXT", "text": "Tracking No.", "x": 100, "y": 64, "fontSize": 7, "color": "#6B7785" },
+        { "id": "trkNoVal", "type": "TEXT", "binding": "shipment.tracking", "x": 100, "y": 75, "fontSize": 9, "bold": true, "color": "#0B2545" },
+        { "id": "bc", "type": "BARCODE", "binding": "shipment.tracking", "symbology": "code128", "x": 330, "y": 40, "width": 175, "height": 32, "showText": true }
+      ]
+    },
+    {
+      "id": "Z", "name": "Footer", "type": "FOOTER", "x": 40, "y": 792, "width": 515, "height": 34,
+      "background": "#0B2545", "cornerRadius": 4, "padding": 8, "repeatOnEveryPage": true,
+      "elements": [
+        { "id": "footerText", "type": "TEXT", "binding": "company.footerText", "fontSize": 8, "color": "#9FB3C8" },
+        { "id": "pageNumber", "type": "PAGE_NUMBER", "text": "Page {{page}} of {{pages}}", "color": "#9FB3C8" }
+      ]
+    }
+  ]
+}

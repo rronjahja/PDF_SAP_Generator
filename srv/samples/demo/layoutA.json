@@ -1,0 +1,78 @@
+{
+  "page": { "format": "A4", "orientation": "portrait", "margin": { "top": 30, "right": 30, "bottom": 30, "left": 30 }, "background": "#FFFFFF" },
+  "windows": [
+    {
+      "id": "A", "name": "Header", "type": "HEADER", "x": 0, "y": 0, "width": 595, "height": 110,
+      "background": "#0E7C7B", "repeatOnEveryPage": true,
+      "elements": [
+        { "id": "companyName", "type": "TEXT", "binding": "company.name", "x": 40, "y": 34, "width": 300, "fontSize": 20, "bold": true, "color": "#FFFFFF" },
+        { "id": "tagline", "type": "TEXT", "text": "PRECISION COMPONENTS", "x": 41, "y": 66, "fontSize": 9, "color": "#BBE3E1" },
+        { "id": "docTitle", "type": "TEXT", "text": "INVOICE", "x": 355, "y": 30, "width": 200, "fontSize": 26, "bold": true, "alignment": "right", "color": "#FFFFFF" },
+        { "id": "accent", "type": "RECTANGLE", "x": 415, "y": 72, "width": 140, "height": 3, "fill": "#F2B441", "borderWidth": 0 }
+      ]
+    },
+    {
+      "id": "B", "name": "Bill To", "type": "ADDRESS", "x": 40, "y": 142, "width": 280, "height": 80,
+      "elements": [
+        { "id": "billToLabel", "type": "TEXT", "text": "BILL TO", "fontSize": 8, "bold": true, "color": "#0E7C7B" },
+        { "id": "customerName", "type": "TEXT", "binding": "customer.name", "fontSize": 12, "bold": true },
+        { "id": "customerStreet", "type": "TEXT", "binding": "customer.street" },
+        { "id": "customerCity", "type": "TEXT", "binding": "customer.city" }
+      ]
+    },
+    {
+      "id": "C", "name": "Invoice Metadata", "type": "METADATA", "x": 330, "y": 142, "width": 225, "height": 80,
+      "elements": [
+        { "id": "invNo", "type": "TEXT", "label": "Invoice No.", "binding": "invoice.number" },
+        { "id": "invDate", "type": "TEXT", "label": "Date", "binding": "invoice.date", "format": "date" },
+        { "id": "dueDate", "type": "TEXT", "label": "Due Date", "binding": "invoice.dueDate", "format": "date" },
+        { "id": "ref", "type": "TEXT", "label": "Your Ref", "binding": "invoice.poNumber" }
+      ]
+    },
+    {
+      "id": "D", "name": "Items", "type": "TABLE", "x": 40, "y": 250, "width": 515, "height": 250,
+      "binding": "items", "repeatHeader": true,
+      "columns": [
+        { "label": "Material", "binding": "material", "width": 75 },
+        { "label": "Description", "binding": "description", "width": 200 },
+        { "label": "Qty", "binding": "quantity", "width": 50, "align": "right" },
+        { "label": "Unit Price", "binding": "price", "width": 85, "format": "currency" },
+        { "label": "Amount", "binding": "total", "width": 105, "format": "currency" }
+      ]
+    },
+    {
+      "id": "F", "name": "Totals", "type": "TOTALS", "x": 330, "y": 515, "width": 225, "height": 75,
+      "elements": [
+        { "id": "net", "type": "TEXT", "label": "Net", "binding": "totals.net", "format": "currency" },
+        { "id": "vat", "type": "TEXT", "label": "VAT (19%)", "binding": "totals.vat", "format": "currency" },
+        { "id": "gross", "type": "TEXT", "label": "Total", "binding": "totals.gross", "format": "currency", "bold": true }
+      ]
+    },
+    {
+      "id": "P", "name": "Payment", "type": "FREE_SECTION", "x": 40, "y": 515, "width": 265, "height": 130,
+      "background": "#F1F7F6", "cornerRadius": 6,
+      "elements": [
+        { "id": "payTitle", "type": "TEXT", "text": "Scan to pay", "x": 14, "y": 14, "fontSize": 10, "bold": true, "color": "#0E7C7B" },
+        { "id": "qr", "type": "QR_CODE", "binding": "invoice.payRef", "x": 14, "y": 32, "width": 74, "height": 74 },
+        { "id": "payIban", "type": "TEXT", "text": "IBAN DE89 3704 0044 0532 0130 00", "x": 100, "y": 36, "width": 158, "fontSize": 8, "color": "#555555" },
+        { "id": "payBic", "type": "TEXT", "text": "BIC COBADEFFXXX", "x": 100, "y": 50, "width": 158, "fontSize": 8, "color": "#555555" },
+        { "id": "payTerms", "type": "TEXT", "text": "Payable within 14 days.", "x": 100, "y": 64, "width": 158, "fontSize": 8, "color": "#555555" },
+        { "id": "barcode", "type": "BARCODE", "binding": "invoice.number", "symbology": "code128", "x": 14, "y": 98, "width": 165, "height": 24, "showText": true }
+      ]
+    },
+    {
+      "id": "N", "name": "Notes", "type": "FREE_SECTION", "x": 40, "y": 670, "width": 515, "height": 60,
+      "elements": [
+        { "id": "thanks", "type": "TEXT", "text": "Thank you for your business.", "x": 0, "y": 0, "fontSize": 11, "italic": true, "color": "#0E7C7B" },
+        { "id": "terms", "type": "TEXT", "text": "Please quote the invoice number with your payment. Goods remain our property until paid in full.", "x": 0, "y": 22, "width": 515, "fontSize": 8, "color": "#777777" }
+      ]
+    },
+    {
+      "id": "Z", "name": "Footer", "type": "FOOTER", "x": 40, "y": 792, "width": 515, "height": 36, "repeatOnEveryPage": true,
+      "elements": [
+        { "id": "footerText", "type": "TEXT", "binding": "company.footerText", "fontSize": 8 },
+        { "id": "pageNumber", "type": "PAGE_NUMBER", "text": "Page {{page}} of {{pages}}" }
+      ]
+    }
+  ]
+}

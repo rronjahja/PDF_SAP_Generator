@@ -1,0 +1,14 @@
+{
+  "company": { "name": "Meridian Logistics", "footerText": "Meridian Logistics GmbH · Speicherstadt 4, 20457 Hamburg · VAT DE 198 220 110 · ops@meridian.example" },
+  "shipFrom": { "line1": "Speicherstadt 4, Block H", "line2": "20457 Hamburg, Germany" },
+  "shipTo": { "name": "Cascadia Trading LLC", "line1": "1200 Harbor Blvd, Suite 410", "line2": "Seattle, WA 98101, USA" },
+  "invoice": { "number": "MRD-INV-77310", "date": "2026-06-18", "currency": "USD", "poNumber": "PO-44215-DE", "incoterms": "DAP Hamburg" },
+  "shipment": { "tracking": "MRDU2208841", "trackingUrl": "https://track.meridian.example/MRDU2208841" },
+  "items": [
+    { "description": "Ocean freight — 2× 40ft HC container", "weight": "24,800 kg", "quantity": 2, "rate": 3120, "amount": 6240 },
+    { "description": "Customs clearance & documentation", "weight": "—", "quantity": 1, "rate": 480, "amount": 480 },
+    { "description": "Inland haulage (port to terminal)", "weight": "—", "quantity": 1, "rate": 640, "amount": 640 },
+    { "description": "Cargo insurance (0.35% of value)", "weight": "—", "quantity": 1, "rate": 415.50, "amount": 415.50 }
+  ],
+  "totals": { "net": 7775.50, "vat": 0, "gross": 7775.50 }
+}

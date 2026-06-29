@@ -18,6 +18,7 @@ const { AppError } = require('./errors');
 const { validateLayout } = require('./layout-validator');
 const { validateData } = require('./binding-resolver');
 const { renderDocument } = require('./html-renderer');
+const { renderPdf } = require('./pdfkit-renderer');
 const { resolvePath } = require('./binding-resolver');
 const { deliverOne } = require('./delivery');
 const { htmlToPdf } = require('./pdf-generator');
@@ -293,9 +294,14 @@ async function generate(args) {
       );
     }
 
-    // 5. Render HTML and generate the PDF
-    const { html } = await renderDocument(layout, payload, renderOptions(locale));
-    const pdfBuffer = await htmlToPdf(html, { format: layout.page && layout.page.format });
+    // 5. Render the PDF — Chromium-free pdfkit backend, or the HTML + Chromium pipeline
+    let pdfBuffer;
+    if ((process.env.PDF_ENGINE || 'chromium').toLowerCase() === 'pdfkit') {
+      pdfBuffer = await renderPdf(layout, payload, renderOptions(locale));
+    } else {
+      const { html } = await renderDocument(layout, payload, renderOptions(locale));
+      pdfBuffer = await htmlToPdf(html, { format: layout.page && layout.page.format });
+    }
 
     // 6. Persist results
     const durationMs = Date.now() - startedAt;

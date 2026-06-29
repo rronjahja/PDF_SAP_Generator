@@ -540,3 +540,10 @@ input.mono, textarea.mono { font-family: var(--mono); font-size: 12px; }
 .dialog .prow { display: grid; grid-template-columns: 170px 1fr; align-items: center; gap: 10px; margin-bottom: 9px; }
 .dest-picker { display: flex; flex-direction: column; gap: 7px; margin: 4px 0 8px; }
 .dest-check { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+
+.linklike { background: none; border: none; padding: 0; margin: 0; color: var(--accent); font: inherit; font-weight: 600; cursor: pointer; text-align: left; }
+.linklike:hover { text-decoration: underline; }
+.dialog.dialog-pdf { max-width: 920px; width: calc(100% - 48px); height: 86vh; max-height: 86vh; padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.pdf-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.pdf-title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 520px; }
+.pdf-frame { flex: 1; width: 100%; border: none; background: #525659; }
