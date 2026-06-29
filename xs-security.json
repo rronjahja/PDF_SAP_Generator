@@ -2,26 +2,7 @@
   "xsappname": "pdf-form-builder",
   "tenant-mode": "dedicated",
   "description": "Drag-and-drop PDF form builder and generation API",
-  "scopes": [
-    { "name": "$XSAPPNAME.Viewer", "description": "View templates and generated documents" },
-    { "name": "$XSAPPNAME.Designer", "description": "Create and edit template drafts" },
-    { "name": "$XSAPPNAME.Publisher", "description": "Review, approve, and publish template versions" },
-    { "name": "$XSAPPNAME.Admin", "description": "Manage destinations, assets, and configuration" },
-    { "name": "$XSAPPNAME.Generate", "description": "Call the runtime PDF generation API" }
-  ],
-  "role-templates": [
-    { "name": "PdfFormsViewer", "description": "Read-only access", "scope-references": ["$XSAPPNAME.Viewer"] },
-    { "name": "PdfFormsDesigner", "description": "Template designer", "scope-references": ["$XSAPPNAME.Viewer", "$XSAPPNAME.Designer", "$XSAPPNAME.Generate"] },
-    { "name": "PdfFormsPublisher", "description": "Template publisher/reviewer", "scope-references": ["$XSAPPNAME.Viewer", "$XSAPPNAME.Designer", "$XSAPPNAME.Publisher", "$XSAPPNAME.Generate"] },
-    { "name": "PdfFormsAdmin", "description": "Administrator", "scope-references": ["$XSAPPNAME.Viewer", "$XSAPPNAME.Designer", "$XSAPPNAME.Publisher", "$XSAPPNAME.Admin", "$XSAPPNAME.Generate"] },
-    { "name": "PdfFormsIntegration", "description": "Technical user for the generation API", "scope-references": ["$XSAPPNAME.Generate"] }
-  ],
-  "role-collections": [
-    { "name": "PDF Forms Designer", "description": "Design templates", "role-template-references": ["$XSAPPNAME.PdfFormsDesigner"] },
-    { "name": "PDF Forms Publisher", "description": "Approve and publish", "role-template-references": ["$XSAPPNAME.PdfFormsPublisher"] },
-    { "name": "PDF Forms Admin", "description": "Full administration", "role-template-references": ["$XSAPPNAME.PdfFormsAdmin"] }
-  ],
   "oauth2-configuration": {
-    "redirect-uris": ["https://*.cfapps.eu10.hana.ondemand.com/**", "https://*.cfapps.us10.hana.ondemand.com/**"]
+    "redirect-uris": ["https://*.cfapps.eu10.hana.ondemand.com/**", "https://*.cfapps.us10.hana.ondemand.com/**", "https://*.cfapps.us10-001.hana.ondemand.com/**"]
   }
 }

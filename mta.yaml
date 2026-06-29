@@ -51,6 +51,26 @@ modules:
     requires:
       - name: pdf-form-builder-db
 
+  # ── App Router: performs the XSUAA login and forwards authenticated traffic to the srv ──
+  - name: pdf-form-builder-approuter
+    type: nodejs
+    path: app/router
+    parameters:
+      buildpack: nodejs_buildpack
+      memory: 256M
+      disk-quota: 512M
+    build-parameters:
+      builder: npm
+      ignore: ["node_modules/"]
+    requires:
+      - name: srv-api
+        group: destinations
+        properties:
+          name: srv-api
+          url: ~{srv-url}
+          forwardAuthToken: true
+      - name: pdf-form-builder-uaa
+
 resources:
   - name: pdf-form-builder-db
     type: com.sap.xs.hdi-container

@@ -1,0 +1,14 @@
+{
+  "name": "pdf-form-builder-approuter",
+  "version": "1.0.0",
+  "description": "App Router for the PDF Form Builder (XSUAA login + reverse proxy to the srv)",
+  "engines": {
+    "node": "^20 || ^22"
+  },
+  "dependencies": {
+    "@sap/approuter": "^22.0.3"
+  },
+  "scripts": {
+    "start": "node node_modules/@sap/approuter/approuter.js"
+  }
+}

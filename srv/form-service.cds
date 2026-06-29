@@ -35,7 +35,7 @@ service TemplateService {
   entity TemplateVersions as projection on db.TemplateVersions;
 
   /** Validates layout JSON, sets the version to PUBLISHED, makes it the active version, archives previously published versions */
-  @(requires: 'Publisher')
+  @(requires: 'authenticated-user')
   action publishTemplateVersion(templateVersionId : UUID) returns TemplateVersions;
 
   /** Copies the active (or latest) version into a new DRAFT version with an increased version number */
@@ -46,15 +46,15 @@ service TemplateService {
 
   /** Approval workflow: DRAFT -> REVIEW -> PUBLISHED (or back to DRAFT on reject) */
   action submitForReview(templateVersionId : UUID)        returns TemplateVersions;
-  @(requires: 'Publisher')
+  @(requires: 'authenticated-user')
   action approveVersion(templateVersionId : UUID, comment : String) returns TemplateVersions;
-  @(requires: 'Publisher')
+  @(requires: 'authenticated-user')
   action rejectVersion(templateVersionId : UUID, comment : String)  returns TemplateVersions;
 
   /** Reusable layout blocks */
   entity Blocks        as projection on db.Blocks;
   /** Delivery destinations (local dir, FTP, SFTP, printer, webhook) */
-  @(restrict: [{ grant: 'READ', to: 'Viewer' }, { grant: '*', to: 'Admin' }])
+  @(requires: 'authenticated-user')
   entity DeliveryDestinations as projection on db.DeliveryDestinations;
   /** Delivery attempts per generated document */
   @readonly entity Deliveries as projection on db.Deliveries;
