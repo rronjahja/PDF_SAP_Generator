@@ -13,6 +13,8 @@ build-parameters:
         - npm ci
         - npm run build:designer
         - npx cds build --production
+        - mkdir -p gen/srv/app/designer
+        - cp -r app/designer/dist gen/srv/app/designer/dist
 
 modules:
   # ── CAP service: OData design-time API, runtime REST API, and the designer UI ──

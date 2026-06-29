@@ -1,5 +1,4 @@
 'use strict';
-require('./lib/seed-demo-templates');
 /**
  * Custom CAP server
  *
@@ -29,8 +28,14 @@ cds.on('bootstrap', (app) => {
   // Build it with: cd app/designer && npm install && npm run build
   const path = require('path');
   const fs = require('fs');
-  const designerDist = path.join(__dirname, '..', 'app', 'designer', 'dist');
-  if (fs.existsSync(designerDist)) {
+  const designerCandidates = [
+    path.join(__dirname, '..', 'app', 'designer', 'dist'),
+    path.join(__dirname, 'app', 'designer', 'dist'),
+    path.join(process.cwd(), 'app', 'designer', 'dist'),
+    path.join(process.cwd(), 'srv', 'app', 'designer', 'dist')
+  ];
+  const designerDist = designerCandidates.find((p) => fs.existsSync(p));
+  if (designerDist) {
     app.use('/designer', express.static(designerDist));
     app.get('/designer/*splat', (_req, res) => res.sendFile(path.join(designerDist, 'index.html')));
   }

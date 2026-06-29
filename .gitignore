@@ -9,3 +9,5 @@ gen
 mta_archives
 node_modules
 
+/node_modules
+/node_modules/
