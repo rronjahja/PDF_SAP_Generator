@@ -21,7 +21,7 @@
 @srv = https://bb2bd51ctrial-dev-pdf-form-builder-srv.cfapps.us10-001.hana.ondemand.com
 @tokenUrl = https://bb2bd51ctrial.authentication.us10.hana.ondemand.com
 @clientid = sb-pdf-form-builder!t662288
-@clientsecret = 3198f6bf-84ec-47ae-8755-382fe089c58e$iEHZlZYX6Twc3j8efqkdB21AaQUgEacXeFkfz5ddqAA=
+@clientsecret = 
 
 
 ### 1) Get an access token  (run this one FIRST)
