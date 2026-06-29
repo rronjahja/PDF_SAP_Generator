@@ -43,3 +43,145 @@ GET {{baseUrl}}/api/v1/documents/{documentId}/download
 GET {{baseUrl}}/api/v1/documents/a1d0c0de-0001-4a1a-9aaa-000000000001/download
 ###
 GET {{baseUrl}}/api/v1/documents/a1d0c0de-0002-4b2b-9bbb-000000000002/download
+
+
+
+### ──────────────────────────────────────────────────────────────────────────
+### PDF Form Builder — API smoke test
+### Every successful write below is stored in HANA (the deployed HDI container).
+###
+### SETUP (one time): get credentials with these two CF commands:
+###     cf create-service-key pdf-form-builder-uaa apikey
+###     cf service-key       pdf-form-builder-uaa apikey
+### The second command prints JSON. Copy three values into the variables below:
+###     "clientid"     -> @clientid
+###     "clientsecret" -> @clientsecret
+###     "url"          -> @tokenUrl
+###
+### HOW TO RUN: click the little "Send Request" link that appears above each
+### request, top to bottom. Run #1 first (it fetches the token the others use).
+### ──────────────────────────────────────────────────────────────────────────
+
+@srv = https://bb2bd51ctrial-dev-pdf-form-builder-srv.cfapps.us10-001.hana.ondemand.com
+@tokenUrl = https://bb2bd51ctrial.authentication.us10.hana.ondemand.com
+@clientid = sb-pdf-form-builder!t662288
+@clientsecret = 3198f6bf-84ec-47ae-8755-382fe089c58e$iEHZlZYX6Twc3j8efqkdB21AaQUgEacXeFkfz5ddqAA=
+
+
+### 1) Get an access token  (run this one FIRST)
+# @name login
+POST {{tokenUrl}}/oauth/token
+Content-Type: application/x-www-form-urlencoded
+Authorization: Basic {{clientid}}:{{clientsecret}}
+
+grant_type=client_credentials
+
+
+### ── AURORA #1 — Nordic Automation AS (Oslo) ───────────────────────────────
+POST {{srv}}/api/v1/templates/aurora-invoice/generate
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "version": "latest",
+  "returnMode": "base64",
+  "fileName": "aurora-AC-2026-0517.pdf",
+  "data": {
+    "company": { "name": "Aurora Components GmbH", "footerText": "Aurora Components GmbH · Friedrichstraße 88, 10117 Berlin · VAT DE 271 884 552 · www.aurora-components.example" },
+    "customer": { "name": "Nordic Automation AS", "street": "Storgata 14", "city": "0184 Oslo, Norway" },
+    "invoice": { "number": "AC-2026-0517", "date": "2026-06-20", "dueDate": "2026-07-04", "currency": "EUR", "poNumber": "PO-NO-88431", "payRef": "PAY;IBAN=DE89370400440532013000;AMT=4873.05;REF=AC-2026-0517" },
+    "items": [
+      { "material": "AC-SERVO-22", "description": "Servo drive unit, 2.2 kW", "quantity": 3, "price": 480, "total": 1440 },
+      { "material": "AC-PSU-48", "description": "48 V power supply, 1000 W", "quantity": 5, "price": 165, "total": 825 },
+      { "material": "AC-HMI-10", "description": "10\" HMI touch panel", "quantity": 2, "price": 540, "total": 1080 },
+      { "material": "AC-SVC", "description": "On-site commissioning & training", "quantity": 1, "price": 750, "total": 750 }
+    ],
+    "totals": { "net": 4095, "vat": 778.05, "gross": 4873.05 }
+  }
+}
+
+
+### ── AURORA #2 — Lumière Médical SAS (Lyon) ─────────────────────────────────
+POST {{srv}}/api/v1/templates/aurora-invoice/generate
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "version": "latest",
+  "returnMode": "base64",
+  "fileName": "aurora-AC-2026-0533.pdf",
+  "data": {
+    "company": { "name": "Aurora Components GmbH", "footerText": "Aurora Components GmbH · Friedrichstraße 88, 10117 Berlin · VAT DE 271 884 552 · www.aurora-components.example" },
+    "customer": { "name": "Lumière Médical SAS", "street": "42 Rue de la République", "city": "69002 Lyon, France" },
+    "invoice": { "number": "AC-2026-0533", "date": "2026-06-22", "dueDate": "2026-07-06", "currency": "EUR", "poNumber": "PO-FR-90217", "payRef": "PAY;IBAN=DE89370400440532013000;AMT=4895.66;REF=AC-2026-0533" },
+    "items": [
+      { "material": "AC-MTR-07", "description": "Brushless DC motor, 750 W", "quantity": 10, "price": 210, "total": 2100 },
+      { "material": "AC-GBX-30", "description": "Planetary gearbox, ratio 30:1", "quantity": 10, "price": 145, "total": 1450 },
+      { "material": "AC-CBL-15", "description": "Shielded motor cable, 15 m", "quantity": 12, "price": 32, "total": 384 },
+      { "material": "AC-DOC", "description": "Technical documentation set", "quantity": 1, "price": 180, "total": 180 }
+    ],
+    "totals": { "net": 4114, "vat": 781.66, "gross": 4895.66 }
+  }
+}
+
+
+### ── MERIDIAN #1 — Andes Import Group S.A. (Valparaíso) ─────────────────────
+POST {{srv}}/api/v1/templates/meridian-commercial-invoice/generate
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "version": "latest",
+  "returnMode": "base64",
+  "fileName": "meridian-MRD-INV-77342.pdf",
+  "data": {
+    "company": { "name": "Meridian Logistics", "footerText": "Meridian Logistics GmbH · Speicherstadt 4, 20457 Hamburg · VAT DE 198 220 110 · ops@meridian.example" },
+    "shipFrom": { "line1": "Speicherstadt 4, Block H", "line2": "20457 Hamburg, Germany" },
+    "shipTo": { "name": "Andes Import Group S.A.", "line1": "Av. Brasil 1265", "line2": "Valparaíso 2340000, Chile" },
+    "invoice": { "number": "MRD-INV-77342", "date": "2026-06-21", "currency": "USD", "poNumber": "PO-51120-CL", "incoterms": "CIF Valparaíso" },
+    "shipment": { "tracking": "MRDU2231907", "trackingUrl": "https://track.meridian.example/MRDU2231907" },
+    "items": [
+      { "description": "Ocean freight — 3× 20ft container", "weight": "33,600 kg", "quantity": 3, "rate": 2180, "amount": 6540 },
+      { "description": "Customs clearance & documentation", "weight": "—", "quantity": 1, "rate": 520, "amount": 520 },
+      { "description": "Inland haulage (port to warehouse)", "weight": "—", "quantity": 1, "rate": 720, "amount": 720 },
+      { "description": "Cargo insurance (0.4% of value)", "weight": "—", "quantity": 1, "rate": 388.40, "amount": 388.40 }
+    ],
+    "totals": { "net": 8168.40, "vat": 0, "gross": 8168.40 }
+  }
+}
+
+
+### ── MERIDIAN #2 — Maple Ridge Distributors Inc. (Toronto) ──────────────────
+POST {{srv}}/api/v1/templates/meridian-commercial-invoice/generate
+Authorization: Bearer {{login.response.body.access_token}}
+Content-Type: application/json
+
+{
+  "version": "latest",
+  "returnMode": "base64",
+  "fileName": "meridian-MRD-INV-77389.pdf",
+  "data": {
+    "company": { "name": "Meridian Logistics", "footerText": "Meridian Logistics GmbH · Speicherstadt 4, 20457 Hamburg · VAT DE 198 220 110 · ops@meridian.example" },
+    "shipFrom": { "line1": "Speicherstadt 4, Block H", "line2": "20457 Hamburg, Germany" },
+    "shipTo": { "name": "Maple Ridge Distributors Inc.", "line1": "350 Bay Street, Unit 1100", "line2": "Toronto, ON M5H 2S6, Canada" },
+    "invoice": { "number": "MRD-INV-77389", "date": "2026-06-24", "currency": "USD", "poNumber": "PO-60934-CA", "incoterms": "DAP Toronto" },
+    "shipment": { "tracking": "MRDU2245518", "trackingUrl": "https://track.meridian.example/MRDU2245518" },
+    "items": [
+      { "description": "Air freight — palletized electronics", "weight": "4,200 kg", "quantity": 1, "rate": 9450, "amount": 9450 },
+      { "description": "Export packing & crating", "weight": "—", "quantity": 1, "rate": 680, "amount": 680 },
+      { "description": "Customs brokerage", "weight": "—", "quantity": 1, "rate": 540, "amount": 540 },
+      { "description": "Cargo insurance (0.3% of value)", "weight": "—", "quantity": 1, "rate": 320.10, "amount": 320.10 }
+    ],
+    "totals": { "net": 10990.10, "vat": 0, "gross": 10990.10 }
+  }
+}
+
+
+### ── (optional) See everything you just generated, newest first ─────────────
+GET {{srv}}/odata/v4/log/GeneratedDocuments?$select=ID,fileName,documentNumber,status,size,generatedAt&$orderby=generatedAt desc&$top=20
+Authorization: Bearer {{login.response.body.access_token}}
+
+
+### ── (optional) Download one PDF — put a documentId from a response above ────
+GET {{srv}}/api/v1/documents/PASTE_documentId/download
+Authorization: Bearer {{login.response.body.access_token}}

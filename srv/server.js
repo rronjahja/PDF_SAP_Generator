@@ -163,17 +163,23 @@ cds.on('bootstrap', (app) => {
   app.get('/api/v1/documents/:id/download', async (req, res) => {
     try {
       const { GeneratedDocuments } = cds.entities('pdfforms');
-      const doc = await SELECT.one.from(GeneratedDocuments)
-        .columns('ID', 'fileName', 'mimeType', 'content')
-        .where({ ID: req.params.id });
+      // Read the BLOB inside a tx so the HANA LOB locator stays valid while we consume it.
+      const doc = await cds.tx(async (tx) => {
+        const row = await tx.run(SELECT.one.from(GeneratedDocuments)
+          .columns('ID', 'fileName', 'mimeType', 'content')
+          .where({ ID: req.params.id }));
+        if (!row || row.content == null) return null;
+        let b = row.content;
+        if (typeof b === 'string') b = Buffer.from(b, 'base64');
+        else if (!Buffer.isBuffer(b) && (typeof b.pipe === 'function' || typeof b[Symbol.asyncIterator] === 'function')) {
+          const chunks = [];
+          for await (const c of b) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+          b = Buffer.concat(chunks);
+        }
+        return { fileName: row.fileName, mimeType: row.mimeType, content: b };
+      });
       if (!doc || doc.content == null) return res.status(404).json({ error: { code: 'DOCUMENT_NOT_FOUND', message: 'Document not found or its content was not stored.' } });
-      let buf = doc.content;
-      if (typeof buf === 'string') buf = Buffer.from(buf, 'base64');
-      else if (!Buffer.isBuffer(buf) && typeof buf.pipe === 'function') {
-        const chunks = [];
-        for await (const c of buf) chunks.push(c);
-        buf = Buffer.concat(chunks);
-      }
+      const buf = doc.content;
       res.set('Content-Type', doc.mimeType || 'application/pdf');
       const disposition = req.query.inline ? 'inline' : 'attachment';
       res.set('Content-Disposition', `${disposition}; filename="${(doc.fileName || 'document.pdf').replace(/"/g, '')}"`);
@@ -182,6 +188,59 @@ cds.on('bootstrap', (app) => {
       sendError(res, err);
     }
   });
+
+  /**
+   * Store a ready-made PDF and make it show up in the Documents tab.
+   * No rendering of any kind — the PDF comes in the request body.
+   * Two ways to send it:
+   *   (a) raw file:   Content-Type: application/pdf   body = the PDF bytes
+   *                   optional ?fileName=...&documentNumber=...
+   *   (b) JSON:       { "fileName": "...", "contentBase64": "<base64 pdf>", "documentNumber": "..." }
+   */
+  app.post('/api/v1/documents',
+    express.raw({ type: ['application/pdf', 'application/octet-stream'], limit: '25mb' }),
+    async (req, res) => {
+      try {
+        let buf, fileName, documentNumber, mimeType;
+        if (Buffer.isBuffer(req.body) && req.body.length) {
+          buf = req.body;
+          fileName = req.query.fileName;
+          documentNumber = req.query.documentNumber;
+          mimeType = req.get('content-type') || 'application/pdf';
+        } else {
+          const b = req.body || {};
+          if (!b.contentBase64) {
+            return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: "Send a PDF as the body (Content-Type: application/pdf), or JSON with 'contentBase64'." } });
+          }
+          buf = Buffer.from(b.contentBase64, 'base64');
+          fileName = b.fileName;
+          documentNumber = b.documentNumber;
+          mimeType = b.mimeType || 'application/pdf';
+        }
+        if (!buf || !buf.length) {
+          return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: 'The request body did not contain any PDF bytes.' } });
+        }
+        const { GeneratedDocuments } = cds.entities('pdfforms');
+        const documentId = cds.utils.uuid();
+        const finalName = fileName || `document-${documentId}.pdf`;
+        await INSERT.into(GeneratedDocuments).entries({
+          ID: documentId,
+          tenantId: 'default',
+          documentNumber: documentNumber || null,
+          fileName: finalName,
+          mimeType: mimeType || 'application/pdf',
+          content: buf,
+          size: buf.length,
+          returnMode: 'base64',
+          status: 'SUCCESS',
+          generatedAt: new Date().toISOString(),
+          generatedBy: (req.user && req.user.id) || 'api-user'
+        });
+        res.status(201).json({ documentId, fileName: finalName, size: buf.length, status: 'SUCCESS' });
+      } catch (err) {
+        sendError(res, err);
+      }
+    });
 
   /** Connectivity test for a delivery destination. */
   app.post('/api/v1/destinations/:id/test', async (req, res) => {
