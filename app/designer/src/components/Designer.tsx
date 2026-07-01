@@ -34,6 +34,7 @@ import { LayersPanel } from './LayersPanel';
 import { Modals } from './Modals';
 import { DataPanel } from './DataPanel';
 import { PaintBar } from './PaintBar';
+import { ThemePanel } from './ThemePanel';
 import { Palette } from './Palette';
 import { PropertiesPanel } from './PropertiesPanel';
 
@@ -399,17 +400,18 @@ export function Designer({
       .filter((w) => w.repeatOnEveryPage || (w.page || 1) === currentPage)
       .find((w) => xPt >= w.x && xPt <= w.x + w.width && yPt >= w.y && yPt <= w.y + w.height);
 
+  const [themeOpen, setThemeOpen] = useState(false);
   const addElementTo = (win: LayoutWindow, type: ElementType, atX?: number, atY?: number) => {
-    const noBinding = type === 'LINE' || type === 'PAGE_NUMBER' || type === 'RECTANGLE' || type === 'CURRENT_DATE';
+    const noBinding = ['LINE', 'PAGE_NUMBER', 'RECTANGLE', 'CURRENT_DATE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER'].includes(type);
     const binding = noBinding ? undefined : nextBinding(state.layout, { type });
     const el: LayoutElement = {
       id: nextElementId(win, type),
       type,
       ...(typeof atX === 'number' && typeof atY === 'number'
         ? {
-            x: Math.max(0, Math.min(snap(atX), win.width - 20)),
-            y: Math.max(0, Math.min(snap(atY), win.height - 12))
-          }
+          x: Math.max(0, Math.min(snap(atX), win.width - 20)),
+          y: Math.max(0, Math.min(snap(atY), win.height - 12))
+        }
         : {}),
       ...(binding ? { binding } : {}),
       ...(type === 'TEXT' ? { fontSize: 10 } : {}),
@@ -417,7 +419,17 @@ export function Designer({
       ...(type === 'RECTANGLE' ? { width: 80, height: 40, borderWidth: 1, borderColor: '#333333' } : {}),
       ...(type === 'CHECKBOX' ? { label: 'Label' } : {}),
       ...(type === 'CURRENT_DATE' ? { label: 'Date', format: 'date' } : {}),
-      ...(type === 'PAGE_NUMBER' ? { text: 'Page {{page}} of {{pages}}' } : {})
+      ...(type === 'PAGE_NUMBER' ? { text: 'Page {{page}} of {{pages}}' } : {}),
+      ...(type === 'ELLIPSE' ? { width: 80, height: 50, fill: '#0a6ed1' } : {}),
+      ...(type === 'TRIANGLE' ? { width: 60, height: 52, fill: '#0a6ed1' } : {}),
+      ...(type === 'POLYGON' ? { width: 60, height: 60, sides: 6, fill: '#0a6ed1' } : {}),
+      ...(type === 'ARROW' ? { width: 90, height: 26, color: '#0a6ed1' } : {}),
+      ...(type === 'DIVIDER' ? { width: Math.min(200, win.width), height: 12 } : {}),
+      ...(type === 'CALLOUT' ? { width: 200, height: 50, text: 'Note…' } : {}),
+      ...(type === 'WATERMARK' ? { width: 180, height: 60, text: 'DRAFT' } : {}),
+      ...(type === 'SIGNATURE' ? { width: 170, height: 40 } : {}),
+      ...(type === 'BACKGROUND' ? { width: 90, height: 20, fill: '#f8fafc' } : {}),
+      ...(type === 'PAGE_BORDER' ? { width: 90, height: 20, inset: 14, borderWidth: 1, borderColor: '#333333' } : {})
     };
     dispatch({ type: 'add-element', windowId: win.id, element: el });
     setSelection({ kind: 'element', windowId: win.id, elementId: el.id });
@@ -446,13 +458,13 @@ export function Designer({
         ...def,
         ...(type === 'TABLE'
           ? {
-              binding: tableBinding,
-              repeatHeader: true,
-              columns: [
-                { label: 'Column 1', binding: 'col1', width: Math.round(def.width / 2) },
-                { label: 'Column 2', binding: 'col2', width: Math.round(def.width / 2) }
-              ]
-            }
+            binding: tableBinding,
+            repeatHeader: true,
+            columns: [
+              { label: 'Column 1', binding: 'col1', width: Math.round(def.width / 2) },
+              { label: 'Column 2', binding: 'col2', width: Math.round(def.width / 2) }
+            ]
+          }
           : { elements: [] }),
         ...(type === 'HEADER' || type === 'FOOTER' ? { repeatOnEveryPage: true } : {}),
         ...(currentPage > 1 ? { page: currentPage } : {})
@@ -641,6 +653,23 @@ export function Designer({
         >
           🖌 Paint
         </button>
+        <span className="theme-anchor">
+          <button
+            className={themeOpen ? 'active-tool' : ''}
+            title="Template theme colors (tokens & presets)"
+            onClick={() => setThemeOpen((v) => !v)}
+          >
+            🎨 Theme
+          </button>
+          {themeOpen && (
+            <ThemePanel
+              theme={state.layout.theme}
+              readOnly={readOnly}
+              onChange={(t) => dispatch({ type: 'set-theme', theme: t })}
+              onClose={() => setThemeOpen(false)}
+            />
+          )}
+        </span>
         <span className="vr" />
         <button title="Download the layout as JSON" onClick={() => {
           const blob = new Blob([JSON.stringify(state.layout, null, 2)], { type: 'application/json' });

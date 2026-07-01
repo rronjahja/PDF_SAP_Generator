@@ -129,7 +129,7 @@ export function ensureBindings(data: Obj, layout: Layout): number {
 
 /** Auto-assigned binding names: text1, text2, image1, qr1 … unique across the layout. */
 export function nextBinding(layout: Layout, el: Pick<LayoutElement, 'type'>): string {
-  const prefix = { TEXT: 'text', IMAGE: 'image', QR_CODE: 'qr', BARCODE: 'barcode', LINE: 'line', PAGE_NUMBER: 'page', CHECKBOX: 'check', RECTANGLE: 'rect', CURRENT_DATE: 'date' }[el.type] ?? 'field';
+  const prefix = ({ TEXT: 'text', IMAGE: 'image', QR_CODE: 'qr', BARCODE: 'barcode', LINE: 'line', PAGE_NUMBER: 'page', CHECKBOX: 'check', RECTANGLE: 'rect', CURRENT_DATE: 'date', CALLOUT: 'note', WATERMARK: 'mark' } as Partial<Record<LayoutElement['type'], string>>)[el.type] ?? 'field';
   const used = new Set(collectBindings(layout).map((b) => b.path));
   let i = 1;
   while (used.has(`${prefix}${i}`)) i += 1;

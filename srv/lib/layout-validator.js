@@ -17,7 +17,9 @@
 const { isValidPath } = require('./binding-resolver');
 
 const WINDOW_TYPES = ['HEADER', 'ADDRESS', 'METADATA', 'TABLE', 'TOTALS', 'FOOTER', 'FREE_SECTION'];
-const ELEMENT_TYPES = ['TEXT', 'IMAGE', 'LINE', 'TABLE', 'QR_CODE', 'BARCODE', 'PAGE_NUMBER', 'RECTANGLE', 'CHECKBOX', 'CURRENT_DATE'];
+const ELEMENT_TYPES = ['TEXT', 'IMAGE', 'LINE', 'TABLE', 'QR_CODE', 'BARCODE', 'PAGE_NUMBER', 'RECTANGLE', 'CHECKBOX', 'CURRENT_DATE',
+  // Phase 1 additions (styled shapes & blocks)
+  'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'BACKGROUND', 'PAGE_BORDER', 'SIGNATURE'];
 
 /** Page dimensions in points (layout coordinates are interpreted as pt) */
 const PAGE_FORMATS = {
@@ -56,6 +58,27 @@ function validateLayout(layout) {
   } else if (!PAGE_FORMATS[String(layout.page.format).toUpperCase()]) {
     add('INVALID_LAYOUT_JSON', `Unsupported page format '${layout.page.format}'. Supported: ${Object.keys(PAGE_FORMATS).join(', ')}.`);
   }
+
+  // Theme (optional): { colors: { name: '#hex' | color, ... } }
+  const themeColors = (layout.theme && layout.theme.colors && typeof layout.theme.colors === 'object' && !Array.isArray(layout.theme.colors))
+    ? layout.theme.colors : {};
+  if (layout.theme !== undefined) {
+    if (!layout.theme || typeof layout.theme !== 'object' || Array.isArray(layout.theme)) {
+      add('INVALID_LAYOUT_JSON', "'theme' must be an object like { colors: { primary: '#2563EB' } }.");
+    } else if (layout.theme.colors !== undefined && (typeof layout.theme.colors !== 'object' || Array.isArray(layout.theme.colors))) {
+      add('INVALID_LAYOUT_JSON', "'theme.colors' must be an object mapping token names to colors.");
+    } else {
+      for (const [name, val] of Object.entries(themeColors)) {
+        if (typeof val !== 'string') add('INVALID_LAYOUT_JSON', `Theme color '${name}' must be a color string.`);
+      }
+    }
+  }
+  /** Errors if a '@token' color has no matching theme entry. */
+  const checkToken = (val, where, windowId, elementId) => {
+    if (typeof val === 'string' && val.startsWith('@') && themeColors[val.slice(1)] === undefined) {
+      add('INVALID_LAYOUT_JSON', `${where} references theme color '${val}' but the theme does not define it.`, windowId, elementId);
+    }
+  };
 
   // Windows array
   if (!Array.isArray(layout.windows) || layout.windows.length === 0) {
@@ -130,6 +153,10 @@ function validateLayout(layout) {
       }
     }
 
+    for (const prop of ['background', 'borderColor']) {
+      if (typeof win[prop] === 'string') checkToken(win[prop], `Window ${ref} ('${prop}')`, win.id);
+    }
+
     // Elements
     const elementIds = new Set();
     for (const [elIndex, el] of (win.elements || []).entries()) {
@@ -152,6 +179,15 @@ function validateLayout(layout) {
       }
       if (el.binding && !isValidPath(el.binding)) {
         add('INVALID_LAYOUT_JSON', `Element ${elRef} in window ${ref} has an invalid binding path '${el.binding}'.`, win.id, el.id);
+      }
+      if (el.type === 'POLYGON' && el.sides !== undefined && (!Number.isInteger(el.sides) || el.sides < 3)) {
+        add('INVALID_LAYOUT_JSON', `Polygon element ${elRef} in window ${ref} must have integer 'sides' >= 3.`, win.id, el.id);
+      }
+      for (const prop of ['color', 'fill', 'borderColor', 'accentColor', 'labelBackground', 'labelColor']) {
+        if (typeof el[prop] === 'string') checkToken(el[prop], `Element ${elRef} in window ${ref} ('${prop}')`, win.id, el.id);
+      }
+      if (el.fill && typeof el.fill === 'object' && Array.isArray(el.fill.stops)) {
+        for (const stop of el.fill.stops) if (stop && typeof stop.color === 'string') checkToken(stop.color, `Element ${elRef} in window ${ref} (gradient stop)`, win.id, el.id);
       }
     }
   }

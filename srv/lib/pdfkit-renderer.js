@@ -22,6 +22,7 @@ const bwipjs = require('bwip-js');
 const { resolvePath, formatValue } = require('./binding-resolver');
 const { isVisible } = require('./expr');
 const { pageDimensions } = require('./layout-validator');
+const S = require('./style');
 
 const DEFAULT_ROW_HEIGHT = 16;
 
@@ -111,7 +112,7 @@ async function generateCodes(layout, data) {
 /* ── element drawing ───────────────────────────────────────────────────── */
 function drawTextAt(doc, el, str, gx, gy) {
   const fs = el.fontSize || 10;
-  doc.font(fontFor(el)).fontSize(fs).fillColor(el.color || '#111111');
+  doc.font(fontFor(el)).fontSize(fs).fillColor(S.resolveColor(el.color, doc._theme) || '#111111');
   const opts = { lineGap: fs * 0.35 };
   if (typeof el.width === 'number') { opts.width = el.width; opts.align = el.alignment || 'left'; }
   else { opts.lineBreak = false; if (el.alignment) opts.align = el.alignment; }
@@ -126,7 +127,7 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
       if (el.label !== undefined) {
         const w = el.width || 120;
         doc.font('Helvetica').fontSize(el.fontSize || 10).fillColor('#555555').text(ctx.tr(el.label), gx, gy, { lineBreak: false });
-        doc.font(fontFor(el)).fontSize(el.fontSize || 10).fillColor(el.color || '#111111').text(resolveText(el, data, ctx), gx, gy, { width: w, align: 'right', lineBreak: false });
+        doc.font(fontFor(el)).fontSize(el.fontSize || 10).fillColor(S.resolveColor(el.color, doc._theme) || '#111111').text(resolveText(el, data, ctx), gx, gy, { width: w, align: 'right', lineBreak: false });
       } else {
         drawTextAt(doc, el, resolveText(el, data, ctx), gx, gy);
       }
@@ -135,18 +136,16 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
     case 'RECTANGLE': {
       const w = el.width || 0, h = el.height || 0;
       const r = typeof el.cornerRadius === 'number' ? el.cornerRadius : 0;
-      if (r > 0) doc.roundedRect(gx, gy, w, h, r); else doc.rect(gx, gy, w, h);
-      if (el.fill) doc.fillColor(el.fill).fill();
-      if (typeof el.borderWidth === 'number' ? el.borderWidth > 0 : false) {
-        if (r > 0) doc.roundedRect(gx, gy, w, h, r); else doc.rect(gx, gy, w, h);
-        doc.lineWidth(el.borderWidth).strokeColor(el.borderColor || '#333333').stroke();
-      }
+      const path = () => (r > 0 ? doc.roundedRect(gx, gy, w, h, r) : doc.rect(gx, gy, w, h));
+      S.paintShape(doc, path, S.styleOf(el), { x: gx, y: gy, w, h });
       break;
     }
     case 'LINE': {
-      const w = el.width || 0;
-      const thick = typeof el.height === 'number' && el.height > 0 ? el.height : 1;
-      doc.moveTo(gx, gy).lineTo(gx + w, gy).lineWidth(thick).strokeColor(el.color || '#333333').stroke();
+      const vertical = el.orientation === 'vertical';
+      const len = vertical ? (el.height || 0) : (el.width || 0);
+      const thick = typeof el.thickness === 'number' ? el.thickness
+        : (!vertical && typeof el.height === 'number' && el.height > 0 ? el.height : 1);
+      S.drawLine(doc, gx, gy, len, { vertical, thickness: thick, color: el.color, style: el.lineStyle });
       break;
     }
     case 'QR_CODE':
@@ -183,10 +182,56 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
       let src = el.url || el.src || '';
       if (!src && el.binding) { const { found, value } = resolvePath(data, el.binding); if (found) src = String(value); }
       if (src && src.startsWith('data:image')) {
-        try { doc.image(Buffer.from(src.split(',')[1], 'base64'), gx, gy, { width: el.width, height: el.height }); } catch { /* ignore */ }
+        try {
+          const buf = Buffer.from(src.split(',')[1], 'base64');
+          if (el.fit === 'contain' && el.width && el.height) doc.image(buf, gx, gy, { fit: [el.width, el.height], align: 'center', valign: 'center' });
+          else if (el.fit === 'cover' && el.width && el.height) {
+            doc.save(); doc.rect(gx, gy, el.width, el.height).clip();
+            doc.image(buf, gx, gy, { cover: [el.width, el.height] });
+            doc.restore();
+          } else doc.image(buf, gx, gy, { width: el.width, height: el.height });
+        } catch { /* ignore */ }
       }
       break;
     }
+    case 'ELLIPSE': {
+      const w = el.width || 0, h = el.height || 0;
+      S.paintShape(doc, () => doc.ellipse(gx + w / 2, gy + h / 2, w / 2, h / 2), S.styleOf(el), { x: gx, y: gy, w, h });
+      break;
+    }
+    case 'TRIANGLE': {
+      S.drawTriangle(doc, { x: gx, y: gy, w: el.width || 0, h: el.height || 0 }, el);
+      break;
+    }
+    case 'POLYGON': {
+      S.drawPolygon(doc, { x: gx, y: gy, w: el.width || 0, h: el.height || 0 }, el);
+      break;
+    }
+    case 'ARROW': {
+      S.drawArrow(doc, { x: gx, y: gy, w: el.width || 0, h: el.height || 0 }, el);
+      break;
+    }
+    case 'DIVIDER': {
+      const label = el.label != null ? ctx.tr(el.label) : (el.text != null ? ctx.tr(el.text) : null);
+      S.drawDivider(doc, { x: gx, y: gy, w: el.width || win.width, h: el.height || 0 }, el, label);
+      break;
+    }
+    case 'CALLOUT': {
+      S.drawCallout(doc, { x: gx, y: gy, w: el.width || 120, h: el.height || 40 }, el, resolveText(el, data, ctx));
+      break;
+    }
+    case 'WATERMARK': {
+      if (el.fullPage) break; // handled at page scope in renderPdf
+      S.drawWatermark(doc, el, { x: gx, y: gy, w: el.width || 200, h: el.height || 60 }, resolveText(el, data, ctx) || el.text || 'DRAFT');
+      break;
+    }
+    case 'SIGNATURE': {
+      S.drawSignature(doc, { x: gx, y: gy, w: el.width || 160, h: el.height || 40 }, el, (t) => ctx.tr(t));
+      break;
+    }
+    case 'BACKGROUND':
+    case 'PAGE_BORDER':
+      break; // handled at page scope in renderPdf
     default:
       break;
   }
@@ -196,7 +241,8 @@ function drawFlowElements(doc, win, data, ctx) {
   const pad = typeof win.padding === 'number' ? win.padding : 0;
   const innerX = win.x + pad;
   const innerW = win.width - 2 * pad;
-  const flow = (win.elements || []).filter((el) => isVisible(el.visibleIf, data) && typeof el.x !== 'number' && typeof el.y !== 'number');
+  const flow = (win.elements || []).filter((el) => isVisible(el.visibleIf, data) && typeof el.x !== 'number' && typeof el.y !== 'number'
+    && el.type !== 'BACKGROUND' && el.type !== 'PAGE_BORDER' && !(el.type === 'WATERMARK' && el.fullPage));
   const isTotals = win.type === 'TOTALS';
   let cy = win.y + pad;
   flow.forEach((el, i) => {
@@ -285,8 +331,8 @@ function drawWindow(doc, win, data, ctx, codes, rowsOverride) {
   const path = () => (r > 0 ? doc.roundedRect(win.x, win.y, win.width, win.height, r) : doc.rect(win.x, win.y, win.width, win.height));
 
   // decorations
-  if (win.background) { path(); doc.fillColor(win.background).fill(); }
-  if (typeof win.borderWidth === 'number' && win.borderWidth > 0) { path(); doc.lineWidth(win.borderWidth).strokeColor(win.borderColor || '#333333').stroke(); }
+  if (win.background) { path(); doc.fillColor(S.resolveColor(win.background, doc._theme)).fill(); }
+  if (typeof win.borderWidth === 'number' && win.borderWidth > 0) { path(); doc.lineWidth(win.borderWidth).strokeColor(S.resolveColor(win.borderColor, doc._theme) || '#333333').stroke(); }
 
   // contents (clipped to the window)
   doc.save();
@@ -315,6 +361,7 @@ async function renderPdf(layout, data, options = {}) {
   const windows = layout.windows || [];
 
   const doc = new PDFDocument({ size: [dim.width, dim.height], margin: 0 });
+  doc._theme = layout.theme || null;
   const chunks = [];
   const done = new Promise((resolve, reject) => {
     doc.on('data', (c) => chunks.push(c));
@@ -333,7 +380,7 @@ async function renderPdf(layout, data, options = {}) {
       tr,
       codes
     };
-    if (layout.page && layout.page.background) { doc.rect(0, 0, dim.width, dim.height).fillColor(layout.page.background).fill(); }
+    if (layout.page && layout.page.background) { doc.rect(0, 0, dim.width, dim.height).fillColor(S.resolveColor(layout.page.background, doc._theme)).fill(); }
 
     const pageWindows = windows.filter((w) => {
       if (!isVisible(w.visibleIf, data)) return false;
@@ -343,10 +390,25 @@ async function renderPdf(layout, data, options = {}) {
       return true;
     });
 
+    // Page-scope elements: BACKGROUND under everything, PAGE_BORDER / full-page WATERMARK over everything
+    const pageScope = [];
+    for (const win of pageWindows) {
+      for (const el of win.elements || []) {
+        if (!isVisible(el.visibleIf, data)) continue;
+        if (el.type === 'BACKGROUND' || el.type === 'PAGE_BORDER' || (el.type === 'WATERMARK' && el.fullPage)) pageScope.push(el);
+      }
+    }
+    for (const el of pageScope) if (el.type === 'BACKGROUND') S.drawBackground(doc, el, dim);
+
     for (const win of pageWindows) {
       const slice = phys.slices.get(win.id);
       if (win.type === 'TABLE' && win.grow && slice === null) continue;
       drawWindow(doc, win, data, ctx, codes, win.type === 'TABLE' && win.grow ? slice || [] : undefined);
+    }
+
+    for (const el of pageScope) {
+      if (el.type === 'PAGE_BORDER') S.drawPageBorder(doc, el, dim);
+      else if (el.type === 'WATERMARK') S.drawWatermark(doc, el, { x: 0, y: 0, w: dim.width, h: dim.height }, el.text || 'DRAFT');
     }
   });
 

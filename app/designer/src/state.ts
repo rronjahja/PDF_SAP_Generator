@@ -33,6 +33,7 @@ export type EditorAction =
   | { type: 'set-sample'; sampleData: string } // typing in the editor: no history spam
   | { type: 'sync-data' } // add every missing binding to the JSON
   | { type: 'set-page'; page: Layout['page'] }
+  | { type: 'set-theme'; theme: Layout['theme'] }
   | { type: 'set-page-count'; count: number }
   | { type: 'set-i18n'; i18n: Record<string, Record<string, string>> }
   | { type: 'reorder-window'; id: string; direction: 1 | -1 } // render order = z-order
@@ -112,6 +113,8 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return push(state, { sampleData: withData(state.sampleData, (d) => ensureBindings(d, state.layout)) });
     case 'set-page':
       return push(state, { layout: { ...state.layout, page: action.page } });
+    case 'set-theme':
+      return push(state, { layout: { ...state.layout, theme: action.theme && Object.keys(action.theme.colors ?? {}).length ? action.theme : undefined } });
     case 'set-i18n':
       return push(state, { layout: { ...state.layout, i18n: Object.keys(action.i18n).length ? action.i18n : undefined } });
     case 'set-page-count': {

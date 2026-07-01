@@ -6,6 +6,65 @@ import { BARCODE_SYMBOLOGIES, ELEMENT_TYPES, FONT_FAMILIES, FORMATS, layoutPages
 import { nextElementId, nextWindowId } from '../types';
 
 /* ── Small form primitives ──────────────────────────────────────────── */
+import { ColorPicker } from './ColorPicker';
+import type { Theme } from '../theme';
+import type { GradientFill } from '../types';
+
+const SHAPE_STYLE_TYPES = ['RECTANGLE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'CALLOUT', 'BACKGROUND'];
+const NO_BINDING_TYPES = ['PAGE_NUMBER', 'LINE', 'RECTANGLE', 'CURRENT_DATE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER'];
+const NO_TEXTSTYLE_TYPES = ['RECTANGLE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'BACKGROUND', 'PAGE_BORDER', 'DIVIDER'];
+
+/** Solid color / linear gradient / none — for shape fills. */
+function FillEditor({ value, theme, readOnly, onChange }: {
+  value?: string | GradientFill;
+  theme?: Theme;
+  readOnly: boolean;
+  onChange: (v: string | GradientFill | undefined) => void;
+}) {
+  const kind = value === undefined ? 'none' : typeof value === 'string' ? 'solid' : 'gradient';
+  const grad = kind === 'gradient' ? (value as GradientFill) : undefined;
+  return (
+    <>
+      <Row label="Fill">
+        <select
+          value={kind}
+          disabled={readOnly}
+          onChange={(e) => {
+            const k = e.target.value;
+            if (k === 'none') onChange(undefined);
+            else if (k === 'solid') onChange(typeof value === 'string' ? value : '#eef3fa');
+            else onChange({ type: 'linear', angle: 90, stops: [{ at: 0, color: typeof value === 'string' ? value : '#0a6ed1' }, { at: 1, color: '#ffffff' }] });
+          }}
+        >
+          <option value="none">none</option>
+          <option value="solid">solid</option>
+          <option value="gradient">gradient</option>
+        </select>
+        {kind === 'solid' && (
+          <ColorPicker value={value as string} theme={theme} disabled={readOnly} allowClear={false} onChange={(v) => onChange(v ?? undefined)} />
+        )}
+      </Row>
+      {grad && (
+        <>
+          <div className="prow2">
+            <Row label="From">
+              <ColorPicker value={grad.stops[0]?.color} theme={theme} disabled={readOnly} allowClear={false}
+                onChange={(v) => v && onChange({ ...grad, stops: [{ at: 0, color: v }, grad.stops[1] ?? { at: 1, color: '#ffffff' }] })} />
+            </Row>
+            <Row label="To">
+              <ColorPicker value={grad.stops[grad.stops.length - 1]?.color} theme={theme} disabled={readOnly} allowClear={false}
+                onChange={(v) => v && onChange({ ...grad, stops: [grad.stops[0] ?? { at: 0, color: '#0a6ed1' }, { at: 1, color: v }] })} />
+            </Row>
+          </div>
+          <Row label="Angle°">
+            <Num value={grad.angle ?? 0} disabled={readOnly} onChange={(v) => onChange({ ...grad, angle: v ?? 0 })} />
+          </Row>
+        </>
+      )}
+    </>
+  );
+}
+
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <label className="prow">
@@ -126,6 +185,7 @@ function ColumnsEditor({
 function ElementForm({
   win,
   el,
+  theme,
   readOnly,
   dispatch,
   onSelect,
@@ -133,6 +193,7 @@ function ElementForm({
 }: {
   win: LayoutWindow;
   el: LayoutElement;
+  theme?: Theme;
   readOnly: boolean;
   dispatch: Dispatch<EditorAction>;
   onSelect: (s: Selection) => void;
@@ -149,10 +210,10 @@ function ElementForm({
       <h4>
         Element <span className="mono">{el.id}</span> · {el.type}
       </h4>
-      {el.type === 'TEXT' || el.type === 'PAGE_NUMBER' ? (
+      {el.type === 'TEXT' || el.type === 'PAGE_NUMBER' || el.type === 'CALLOUT' || el.type === 'WATERMARK' ? (
         <Row label="Text"><Txt value={el.text} disabled={readOnly} onChange={(v) => patch({ text: v })} /></Row>
       ) : null}
-      {!['PAGE_NUMBER', 'LINE', 'RECTANGLE', 'CURRENT_DATE'].includes(el.type) && (
+      {!NO_BINDING_TYPES.includes(el.type) && (
         <Row label="Binding"><Txt value={el.binding} disabled={readOnly} mono placeholder="customer.name" onChange={(v) => patch({ binding: v })} /></Row>
       )}
       {el.type === 'IMAGE' && (
@@ -192,27 +253,120 @@ function ElementForm({
           <span className="muted" style={{ fontSize: 11 }}>default when no binding</span>
         </Row>
       )}
-      {el.type === 'RECTANGLE' && (
+      {SHAPE_STYLE_TYPES.includes(el.type) && (
         <>
-          <Row label="Fill">
-            <span className="color-field">
-              <input type="color" value={el.fill ?? '#ffffff'} disabled={readOnly} onChange={(e) => patch({ fill: e.target.value })} />
-              {el.fill && <button className="linkish" disabled={readOnly} onClick={() => patch({ fill: undefined })}>none</button>}
-            </span>
-          </Row>
+          <FillEditor value={el.fill} theme={theme} readOnly={readOnly} onChange={(v) => patch({ fill: v })} />
+          {el.type !== 'BACKGROUND' && (
+            <>
+              <div className="prow2">
+                <Row label="Border pt"><Num value={el.borderWidth ?? (el.type === 'RECTANGLE' ? 1 : 0)} disabled={readOnly} onChange={(v) => patch({ borderWidth: v })} /></Row>
+                {(el.type === 'RECTANGLE' || el.type === 'CALLOUT') ? (
+                  <Row label="Radius"><Num value={el.cornerRadius} disabled={readOnly} onChange={(v) => patch({ cornerRadius: v })} /></Row>
+                ) : <span />}
+              </div>
+              <Row label="Border color">
+                <ColorPicker value={el.borderColor} theme={theme} disabled={readOnly} onChange={(v) => patch({ borderColor: v })} />
+              </Row>
+              <Row label="Border style">
+                <select value={el.borderStyle ?? 'solid'} disabled={readOnly} onChange={(e) => patch({ borderStyle: e.target.value === 'solid' ? undefined : (e.target.value as LayoutElement['borderStyle']) })}>
+                  <option>solid</option><option>dashed</option><option>dotted</option>
+                </select>
+              </Row>
+            </>
+          )}
+        </>
+      )}
+      {(el.type === 'TRIANGLE' || el.type === 'ARROW') && (
+        <Row label="Direction">
+          <select value={el.direction ?? (el.type === 'ARROW' ? 'right' : 'up')} disabled={readOnly} onChange={(e) => patch({ direction: e.target.value as LayoutElement['direction'] })}>
+            <option>up</option><option>down</option><option>left</option><option>right</option>
+          </select>
+        </Row>
+      )}
+      {el.type === 'POLYGON' && (
+        <div className="prow2">
+          <Row label="Sides"><Num value={el.sides ?? 6} disabled={readOnly} min={3} onChange={(v) => patch({ sides: v })} /></Row>
+          <Row label="Rotate°"><Num value={el.rotation} disabled={readOnly} onChange={(v) => patch({ rotation: v })} /></Row>
+        </div>
+      )}
+      {el.type === 'ARROW' && (
+        <div className="prow2">
+          <Row label="Shaft pt"><Num value={el.thickness} disabled={readOnly} onChange={(v) => patch({ thickness: v })} /></Row>
+          <Row label="Head pt"><Num value={el.headSize} disabled={readOnly} onChange={(v) => patch({ headSize: v })} /></Row>
+        </div>
+      )}
+      {el.type === 'DIVIDER' && (
+        <>
           <div className="prow2">
-            <Row label="Border pt"><Num value={el.borderWidth ?? 1} disabled={readOnly} onChange={(v) => patch({ borderWidth: v })} /></Row>
-            <Row label="Radius"><Num value={el.cornerRadius} disabled={readOnly} onChange={(v) => patch({ cornerRadius: v })} /></Row>
+            <Row label="Line pt"><Num value={el.thickness ?? 1} disabled={readOnly} onChange={(v) => patch({ thickness: v })} /></Row>
+            <Row label="Style">
+              <select value={el.lineStyle ?? 'solid'} disabled={readOnly} onChange={(e) => patch({ lineStyle: e.target.value === 'solid' ? undefined : (e.target.value as LayoutElement['lineStyle']) })}>
+                <option>solid</option><option>dashed</option><option>dotted</option><option>double</option>
+              </select>
+            </Row>
           </div>
-          <Row label="Border color">
-            <span className="color-field">
-              <input type="color" value={el.borderColor ?? '#333333'} disabled={readOnly} onChange={(e) => patch({ borderColor: e.target.value })} />
-            </span>
+          <Row label="Label bg">
+            <ColorPicker value={el.labelBackground} theme={theme} disabled={readOnly} clearLabel="paper" onChange={(v) => patch({ labelBackground: v })} />
           </Row>
         </>
       )}
+      {el.type === 'CALLOUT' && (
+        <div className="prow2">
+          <Row label="Accent">
+            <ColorPicker value={el.accentColor} theme={theme} disabled={readOnly} onChange={(v) => patch({ accentColor: v })} />
+          </Row>
+          <Row label="Pad pt"><Num value={el.padding ?? 8} disabled={readOnly} onChange={(v) => patch({ padding: v })} /></Row>
+        </div>
+      )}
+      {el.type === 'WATERMARK' && (
+        <div className="prow2">
+          <Row label="Angle°"><Num value={el.angle ?? -30} disabled={readOnly} onChange={(v) => patch({ angle: v })} /></Row>
+          <Row label="Full page">
+            <input type="checkbox" checked={!!el.fullPage} disabled={readOnly} onChange={(e) => patch({ fullPage: e.target.checked || undefined })} />
+          </Row>
+        </div>
+      )}
+      {el.type === 'SIGNATURE' && (
+        <>
+          <div className="prow2">
+            <Row label="Date line">
+              <input type="checkbox" checked={!!el.showDate} disabled={readOnly} onChange={(e) => patch({ showDate: e.target.checked || undefined })} />
+            </Row>
+            <Row label="Date label"><Txt value={el.dateLabel} disabled={readOnly} placeholder="Date" onChange={(v) => patch({ dateLabel: v })} /></Row>
+          </div>
+          <Row label="Label color">
+            <ColorPicker value={el.labelColor} theme={theme} disabled={readOnly} onChange={(v) => patch({ labelColor: v })} />
+          </Row>
+        </>
+      )}
+      {el.type === 'PAGE_BORDER' && (
+        <>
+          <div className="prow2">
+            <Row label="Inset pt"><Num value={el.inset ?? 12} disabled={readOnly} onChange={(v) => patch({ inset: v })} /></Row>
+            <Row label="Border pt"><Num value={el.borderWidth ?? 1} disabled={readOnly} onChange={(v) => patch({ borderWidth: v })} /></Row>
+          </div>
+          <Row label="Border color">
+            <ColorPicker value={el.borderColor} theme={theme} disabled={readOnly} onChange={(v) => patch({ borderColor: v })} />
+          </Row>
+          <div className="prow2">
+            <Row label="Style">
+              <select value={el.borderStyle ?? 'solid'} disabled={readOnly} onChange={(e) => patch({ borderStyle: e.target.value === 'solid' ? undefined : (e.target.value as LayoutElement['borderStyle']) })}>
+                <option>solid</option><option>dashed</option><option>dotted</option><option>double</option>
+              </select>
+            </Row>
+            <Row label="Radius"><Num value={el.cornerRadius} disabled={readOnly} onChange={(v) => patch({ cornerRadius: v })} /></Row>
+          </div>
+        </>
+      )}
+      {(SHAPE_STYLE_TYPES.includes(el.type) || el.type === 'ARROW' || el.type === 'WATERMARK' || el.type === 'IMAGE') && (
+        <Row label="Opacity">
+          <input type="range" min={0} max={1} step={0.05} value={el.opacity ?? 1} disabled={readOnly}
+            onChange={(e) => patch({ opacity: Number(e.target.value) === 1 ? undefined : Number(e.target.value) })} />
+          <span className="muted" style={{ fontSize: 11 }}>{Math.round((el.opacity ?? 1) * 100)}%</span>
+        </Row>
+      )}
       <Row label="Label"><Txt value={el.label} disabled={readOnly} onChange={(v) => patch({ label: v })} /></Row>
-      {!['RECTANGLE', 'CHECKBOX', 'LINE', 'IMAGE'].includes(el.type) && (
+      {!['RECTANGLE', 'CHECKBOX', 'LINE', 'IMAGE', ...NO_TEXTSTYLE_TYPES, 'SIGNATURE'].includes(el.type) && (
         <Row label="Format">
           <select value={el.format ?? 'text'} disabled={readOnly} onChange={(e) => patch({ format: e.target.value === 'text' ? undefined : e.target.value })}>
             {FORMATS.map((f) => <option key={f}>{f}</option>)}
@@ -244,20 +398,29 @@ function ElementForm({
           <input type="checkbox" checked={!!el.italic} disabled={readOnly} onChange={(e) => patch({ italic: e.target.checked || undefined })} />
         </Row>
       </div>
-      <Row label="Color">
-        <span className="color-field">
-          <input type="color" value={el.color ?? '#181a1e'} disabled={readOnly} onChange={(e) => patch({ color: e.target.value })} />
-          {el.color && <button className="linkish" disabled={readOnly} onClick={() => patch({ color: undefined })}>reset</button>}
-        </span>
-      </Row>
-      {el.type === 'LINE' && (
-        <Row label="Line style">
-          <select value={el.borderStyle ?? 'solid'} disabled={readOnly} onChange={(e) => patch({ borderStyle: e.target.value === 'solid' ? undefined : (e.target.value as LayoutElement['borderStyle']) })}>
-            <option>solid</option>
-            <option>dashed</option>
-            <option>dotted</option>
-          </select>
+      {el.type !== 'BACKGROUND' && (
+        <Row label="Color">
+          <ColorPicker value={el.color} theme={theme} disabled={readOnly} clearLabel="default" onChange={(v) => patch({ color: v })} />
         </Row>
+      )}
+      {el.type === 'LINE' && (
+        <>
+          <div className="prow2">
+            <Row label="Line style">
+              <select value={el.lineStyle ?? el.borderStyle ?? 'solid'} disabled={readOnly}
+                onChange={(e) => patch({ lineStyle: e.target.value === 'solid' ? undefined : (e.target.value as LayoutElement['lineStyle']), borderStyle: undefined })}>
+                <option>solid</option><option>dashed</option><option>dotted</option><option>double</option>
+              </select>
+            </Row>
+            <Row label="Direction">
+              <select value={el.orientation ?? 'horizontal'} disabled={readOnly}
+                onChange={(e) => patch({ orientation: e.target.value === 'horizontal' ? undefined : 'vertical' })}>
+                <option>horizontal</option><option>vertical</option>
+              </select>
+            </Row>
+          </div>
+          <Row label="Line pt"><Num value={el.thickness ?? el.height ?? 1} disabled={readOnly} onChange={(v) => patch({ thickness: v })} /></Row>
+        </>
       )}
       <Row label="Position">
         <select
@@ -392,7 +555,7 @@ function WindowForm({
       </Row>
       <Row label="Background">
         <span className="color-field">
-          <input type="color" value={win.background ?? '#ffffff'} disabled={readOnly} onChange={(e) => patch({ background: e.target.value })} />
+          <ColorPicker value={win.background} theme={layout.theme} disabled={readOnly} onChange={(v) => patch({ background: v })} />
           {win.background && <button className="linkish" disabled={readOnly} onClick={() => patch({ background: undefined })}>none</button>}
         </span>
       </Row>
@@ -403,7 +566,7 @@ function WindowForm({
       {win.borderWidth ? (
         <Row label="Border color">
           <span className="color-field">
-            <input type="color" value={win.borderColor ?? '#333333'} disabled={readOnly} onChange={(e) => patch({ borderColor: e.target.value })} />
+            <ColorPicker value={win.borderColor} theme={layout.theme} disabled={readOnly} onChange={(v) => patch({ borderColor: v })} />
           </span>
         </Row>
       ) : null}
@@ -519,7 +682,7 @@ export function PropertiesPanel({
       ? win.elements?.find((e) => e.id === selection.elementId)
       : undefined;
 
-  if (el && win) return <ElementForm win={win} el={el} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onPickAsset={onPickAsset} />;
+  if (el && win) return <ElementForm win={win} el={el} theme={layout.theme} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onPickAsset={onPickAsset} />;
   if (win) return <WindowForm layout={layout} win={win} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onSaveBlock={onSaveBlock} />;
 
   return (

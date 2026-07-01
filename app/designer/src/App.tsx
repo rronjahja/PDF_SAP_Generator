@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { createTemplate, deleteTemplate, duplicateTemplate, listTemplates } from './api';
+import { createTemplate, deleteTemplate, duplicateTemplate, importTemplatePdf, listTemplates } from './api';
 import type { Template } from './types';
 import { Designer } from './components/Designer';
 import { DestinationsView } from './components/DestinationsView';
@@ -114,6 +114,32 @@ function TemplateList({
         <button className="primary" onClick={create} disabled={busy || !name.trim()}>
           Create template
         </button>
+        <label className={`btn-file${busy ? ' disabled' : ''}`} title="Upload an example PDF — the template is extracted automatically (logo, shapes, colors, text) and opens as a draft for review.">
+          ⇪ Import PDF
+          <input
+            type="file"
+            accept="application/pdf"
+            style={{ display: 'none' }}
+            disabled={busy}
+            onChange={async (e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (!f) return;
+              setBusy(true);
+              try {
+                const tName = (name.trim() || f.name.replace(/\.pdf$/i, '')).toLowerCase().replace(/[^a-z0-9._-]+/g, '-');
+                const r = await importTemplatePdf(f, tName);
+                const s = r.stats ?? {};
+                notify('success', `Imported "${r.name}"`, `${s.textRuns ?? 0} texts, ${s.rects ?? 0} shapes, ${s.lines ?? 0} lines, ${s.images ?? 0} images auto-detected — review the draft.`);
+                onOpen(r.templateId);
+              } catch (err) {
+                notify('error', 'PDF import failed', (err as Error).message);
+              } finally {
+                setBusy(false);
+              }
+            }}
+          />
+        </label>
       </div>
 
       {templates === null && <p className="muted">Loading…</p>}

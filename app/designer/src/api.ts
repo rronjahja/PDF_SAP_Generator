@@ -31,6 +31,24 @@ export async function listTemplates(): Promise<Template[]> {
   return r.value;
 }
 
+/** Headline: upload a PDF, get back an auto-extracted editable template. */
+export async function importTemplatePdf(
+  file: File,
+  name: string
+): Promise<{ templateId: string; versionId: string; name: string; stats: Record<string, number> }> {
+  const res = await fetch(`/api/v1/templates/import?name=${encodeURIComponent(name)}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/pdf' },
+    body: file
+  });
+  if (!res.ok) {
+    let msg = `${res.status}`;
+    try { msg = (await res.json()).error?.message ?? msg; } catch { /* keep status */ }
+    throw new Error(msg);
+  }
+  return res.json();
+}
+
 export async function getTemplate(id: string): Promise<Template> {
   return http<Template>(`${ODATA}/Templates(${id})?$expand=versions($orderby=version desc)`);
 }

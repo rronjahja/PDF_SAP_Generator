@@ -242,6 +242,55 @@ cds.on('bootstrap', (app) => {
       }
     });
 
+  /**
+   * Headline feature: import a PDF and auto-extract an editable template.
+   * Send the PDF as the raw body (Content-Type: application/pdf) with
+   * ?name=my-template, or JSON { name, contentBase64 }.
+   * Creates a Template + DRAFT version whose layout mirrors the PDF
+   * (text runs, fonts, colors, rectangles, lines, embedded images) —
+   * every extracted element is flagged autoDetected for review.
+   */
+  app.post('/api/v1/templates/import',
+    express.raw({ type: ['application/pdf', 'application/octet-stream'], limit: '25mb' }),
+    async (req, res) => {
+      try {
+        let buf, name;
+        if (Buffer.isBuffer(req.body) && req.body.length) {
+          buf = req.body;
+          name = req.query.name;
+        } else {
+          const b = req.body || {};
+          if (!b.contentBase64) {
+            return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: "Send a PDF body (Content-Type: application/pdf) or JSON with 'contentBase64'." } });
+          }
+          buf = Buffer.from(b.contentBase64, 'base64');
+          name = b.name;
+        }
+        if (!buf || buf.length < 5 || buf.slice(0, 5).toString() !== '%PDF-') {
+          return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: 'The request body is not a PDF.' } });
+        }
+        const { importPdf } = require('./lib/pdf-import');
+        const { layout, stats } = await importPdf(buf);
+
+        const { Templates, TemplateVersions } = cds.entities('pdfforms');
+        const templateId = cds.utils.uuid();
+        const versionId = cds.utils.uuid();
+        const tName = String(name || `imported-${Date.now()}`).toLowerCase().replace(/\.pdf$/i, '').replace(/[^a-z0-9._-]+/g, '-').slice(0, 100) || `imported-${Date.now()}`;
+        await INSERT.into(Templates).entries({ ID: templateId, tenantId: 'default', name: tName, description: 'Imported from PDF — auto-detected elements, review before publishing.', status: 'DRAFT' });
+        await INSERT.into(TemplateVersions).entries({
+          ID: versionId,
+          template_ID: templateId,
+          version: 1,
+          status: 'DRAFT',
+          layoutJson: JSON.stringify(layout),
+          sampleDataJson: '{}'
+        });
+        res.status(201).json({ templateId, versionId, name: tName, stats });
+      } catch (err) {
+        sendError(res, err);
+      }
+    });
+
   /** Connectivity test for a delivery destination. */
   app.post('/api/v1/destinations/:id/test', async (req, res) => {
     try {

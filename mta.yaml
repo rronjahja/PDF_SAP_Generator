@@ -15,6 +15,7 @@ build-parameters:
         - npx cds build --production
         - mkdir -p gen/srv/app/designer
         - cp -r app/designer/dist gen/srv/app/designer/dist
+        - cp .npmrc gen/srv/.npmrc
 
 modules:
   # ── CAP service: OData design-time API, runtime REST API, and the designer UI ──
@@ -32,6 +33,7 @@ modules:
       ignore: ["node_modules/", ".env"]
     properties:
       PDF_STORE_DOCUMENTS: "true"
+      PDF_ENGINE: "pdfkit" # Chromium-free rendering (no headless browser on CF)
       # PDF_RATE_LIMIT: "60"          # optional: generations per minute per tenant
       # PDF_API_KEY: set via 'cf set-env' or a user-provided service, never in git
     provides:

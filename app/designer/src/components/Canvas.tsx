@@ -1,6 +1,110 @@
 import { useDraggable, useDroppable } from '@dnd-kit/core';
 import { useCallback, useEffect, useRef } from 'react';
 import type { Layout, LayoutElement, LayoutWindow, Selection } from '../types';
+import type { Theme } from '../theme';
+import { fillToCss, resolveColor } from '../theme';
+
+/* ── shape previews (client-side mirror of the pdfkit shapes) ───────── */
+const SHAPE_TYPES = ['ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER'];
+
+function ShapePreview({ el, zoom, theme }: { el: LayoutElement; zoom: number; theme?: Theme }) {
+  const w = (el.width ?? 80) * zoom;
+  const h = (el.height ?? 40) * zoom;
+  const fill = fillToCss(el.fill, theme);
+  const stroke = resolveColor(el.borderColor, theme) ?? '#333';
+  const sw = Math.max(0, (el.borderWidth ?? 0) * zoom);
+  const solid = typeof el.fill === 'string' || el.fill === undefined ? resolveColor(el.fill as string | undefined, theme) : undefined;
+  const svgFill = solid ?? (typeof el.fill === 'object' ? resolveColor(el.fill.stops?.[0]?.color, theme) : undefined) ?? 'none';
+  const dash = (st?: string) => (st === 'dashed' ? '6 4' : st === 'dotted' ? '1 4' : undefined);
+  const op = el.opacity;
+
+  if (el.type === 'ELLIPSE')
+    return (
+      <svg className="shape-prev" width={w} height={h} style={{ opacity: op }}>
+        <ellipse cx={w / 2} cy={h / 2} rx={Math.max(1, w / 2 - sw / 2)} ry={Math.max(1, h / 2 - sw / 2)} fill={svgFill} stroke={sw ? stroke : 'none'} strokeWidth={sw} strokeDasharray={dash(el.borderStyle)} />
+      </svg>
+    );
+  if (el.type === 'TRIANGLE' || el.type === 'POLYGON' || el.type === 'ARROW') {
+    let pts: [number, number][] = [];
+    if (el.type === 'TRIANGLE') {
+      const d = el.direction ?? 'up';
+      pts = d === 'down' ? [[0, 0], [w, 0], [w / 2, h]] : d === 'left' ? [[w, 0], [w, h], [0, h / 2]] : d === 'right' ? [[0, 0], [0, h], [w, h / 2]] : [[w / 2, 0], [w, h], [0, h]];
+    } else if (el.type === 'POLYGON') {
+      const n = el.sides && el.sides >= 3 ? el.sides : 6;
+      const rot = (((el.rotation ?? 0) - 90) * Math.PI) / 180;
+      const r = Math.min(w, h) / 2;
+      for (let i = 0; i < n; i++) {
+        const a = rot + (i * 2 * Math.PI) / n;
+        pts.push([w / 2 + r * Math.cos(a), h / 2 + r * Math.sin(a)]);
+      }
+    } else {
+      const d = el.direction ?? 'right';
+      const vert = d === 'up' || d === 'down';
+      const s = Math.min((el.thickness ?? (vert ? el.width ?? 26 : el.height ?? 26) * 0.4) * zoom, vert ? w : h);
+      const hd = Math.min((el.headSize ?? (vert ? el.height ?? 90 : el.width ?? 90) * 0.35) * zoom, vert ? h : w);
+      const cx = w / 2, cy = h / 2;
+      if (d === 'right') pts = [[0, cy - s / 2], [w - hd, cy - s / 2], [w - hd, 0], [w, cy], [w - hd, h], [w - hd, cy + s / 2], [0, cy + s / 2]];
+      else if (d === 'left') pts = [[w, cy - s / 2], [hd, cy - s / 2], [hd, 0], [0, cy], [hd, h], [hd, cy + s / 2], [w, cy + s / 2]];
+      else if (d === 'down') pts = [[cx - s / 2, 0], [cx - s / 2, h - hd], [0, h - hd], [cx, h], [w, h - hd], [cx + s / 2, h - hd], [cx + s / 2, 0]];
+      else pts = [[cx - s / 2, h], [cx - s / 2, hd], [0, hd], [cx, 0], [w, hd], [cx + s / 2, hd], [cx + s / 2, h]];
+    }
+    const arrowFill = el.type === 'ARROW' ? (svgFill !== 'none' ? svgFill : resolveColor(el.color, theme) ?? '#111827') : svgFill;
+    return (
+      <svg className="shape-prev" width={w} height={h} style={{ opacity: op }}>
+        <polygon points={pts.map((p) => p.join(',')).join(' ')} fill={arrowFill} stroke={sw ? stroke : 'none'} strokeWidth={sw} strokeDasharray={dash(el.borderStyle)} />
+      </svg>
+    );
+  }
+  if (el.type === 'DIVIDER') {
+    const c = resolveColor(el.color, theme) ?? '#D1D5DB';
+    const st = el.lineStyle;
+    const t = Math.max(1, (el.thickness ?? 1) * zoom);
+    return (
+      <span className="divider-prev" style={{ width: w, opacity: op }}>
+        <i style={{ borderTop: `${t}px ${st === 'double' ? 'double' : st ?? 'solid'} ${c}`, ...(st === 'double' ? { borderTopWidth: t * 3 } : {}) }} />
+        {(el.label || el.text) && <em style={{ background: resolveColor(el.labelBackground, theme) ?? '#fff', color: c }}>{el.label || el.text}</em>}
+      </span>
+    );
+  }
+  if (el.type === 'CALLOUT')
+    return (
+      <span
+        className="callout-prev"
+        style={{
+          width: w, height: h, opacity: op,
+          background: fill ?? '#F3F4F6',
+          borderRadius: (el.cornerRadius ?? 6) * zoom,
+          borderLeft: `${Math.max(2, (el.accentWidth ?? 3) * zoom)}px solid ${resolveColor(el.accentColor, theme) ?? '#2563EB'}`,
+          padding: (el.padding ?? 8) * zoom,
+          color: resolveColor(el.color, theme) ?? '#111827',
+          fontWeight: el.bold ? 600 : 400
+        }}
+      >
+        {el.text || (el.binding ? `{${el.binding}}` : 'Callout')}
+      </span>
+    );
+  if (el.type === 'WATERMARK')
+    return (
+      <span className="wm-prev" style={{ width: w, height: h, opacity: el.opacity ?? 0.15, color: resolveColor(el.color, theme) ?? '#111', transform: `rotate(${el.angle ?? -30}deg)` }}>
+        {el.text || 'DRAFT'}{el.fullPage ? ' (full page)' : ''}
+      </span>
+    );
+  if (el.type === 'SIGNATURE')
+    return (
+      <span className="sig-prev" style={{ width: w, height: h, opacity: op }}>
+        <i style={{ borderColor: resolveColor(el.color, theme) ?? '#111827', width: el.showDate ? '58%' : '100%' }} />
+        {el.showDate && <i style={{ borderColor: resolveColor(el.color, theme) ?? '#111827', width: '32%' }} />}
+        <em style={{ color: resolveColor(el.labelColor, theme) ?? '#6B7280' }}>{el.label ?? 'Signature'}{el.showDate ? ` · ${el.dateLabel ?? 'Date'}` : ''}</em>
+      </span>
+    );
+  // BACKGROUND / PAGE_BORDER: page-scope — show a labeled chip on the canvas
+  return (
+    <span className="chip-prev">
+      <i style={{ background: fill ?? (el.type === 'PAGE_BORDER' ? 'transparent' : '#fff'), borderColor: resolveColor(el.borderColor, theme) ?? '#94a3b8' }} />
+      {el.type === 'BACKGROUND' ? 'Page background' : 'Page border'}
+    </span>
+  );
+}
 
 export type Guides = { v?: number; h?: number } | null;
 import { pageDims } from '../types';
@@ -71,6 +175,7 @@ function ElementView({
   win,
   el,
   zoom,
+  theme,
   selected,
   readOnly,
   onSelect,
@@ -79,6 +184,7 @@ function ElementView({
   win: LayoutWindow;
   el: LayoutElement;
   zoom: number;
+  theme?: Theme;
   selected: boolean;
   readOnly: boolean;
   onSelect: () => void;
@@ -99,7 +205,7 @@ function ElementView({
         fontWeight: el.bold ? 600 : 400,
         textAlign: el.alignment,
         fontStyle: el.italic ? "italic" : undefined,
-        color: el.color,
+        color: resolveColor(el.color, theme),
         transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined
       }
     : {
@@ -107,7 +213,7 @@ function ElementView({
         fontWeight: el.bold ? 600 : 400,
         textAlign: el.alignment,
         fontStyle: el.italic ? "italic" : undefined,
-        color: el.color
+        color: resolveColor(el.color, theme)
       };
   return (
     <div
@@ -128,15 +234,18 @@ function ElementView({
         onInspect();
       }}
     >
-      {el.type === 'RECTANGLE' ? (
+      {SHAPE_TYPES.includes(el.type) ? (
+        <ShapePreview el={el} zoom={zoom} theme={theme} />
+      ) : el.type === 'RECTANGLE' ? (
         <div
           className="rect-preview"
           style={{
             width: (el.width ?? 60) * zoom,
             height: (el.height ?? 30) * zoom,
-            border: `${Math.max(1, (el.borderWidth ?? 1) * zoom)}px ${el.borderStyle ?? 'solid'} ${el.borderColor ?? '#333'}`,
-            background: el.fill,
-            borderRadius: (el.cornerRadius ?? 0) * zoom
+            border: `${Math.max(1, (el.borderWidth ?? 1) * zoom)}px ${el.borderStyle === 'double' ? 'double' : el.borderStyle ?? 'solid'} ${resolveColor(el.borderColor, theme) ?? '#333'}`,
+            background: fillToCss(el.fill, theme),
+            borderRadius: (el.cornerRadius ?? 0) * zoom,
+            opacity: el.opacity
           }}
         />
       ) : el.type === 'CHECKBOX' ? (
@@ -161,6 +270,7 @@ function ElementView({
 function WindowView({
   win,
   zoom,
+  theme,
   selection,
   readOnly,
   onSelect,
@@ -169,6 +279,7 @@ function WindowView({
 }: {
   win: LayoutWindow;
   zoom: number;
+  theme?: Theme;
   selection: Selection;
   readOnly: boolean;
   onSelect: (sel: Selection) => void;
@@ -188,9 +299,9 @@ function WindowView({
     top: win.y * zoom,
     width: win.width * zoom,
     height: win.height * zoom,
-    background: win.background,
+    background: resolveColor(win.background, theme),
     ...(win.borderWidth
-      ? { boxShadow: `inset 0 0 0 ${Math.max(1, win.borderWidth * zoom)}px ${win.borderColor ?? '#333'}` }
+      ? { boxShadow: `inset 0 0 0 ${Math.max(1, win.borderWidth * zoom)}px ${resolveColor(win.borderColor, theme) ?? '#333'}` }
       : {}),
     borderRadius: win.cornerRadius ? win.cornerRadius * zoom : undefined,
     transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined
@@ -245,6 +356,7 @@ function WindowView({
         ) : (
           (win.elements ?? []).map((el) => (
             <ElementView
+              theme={theme}
               key={el.id}
               win={win}
               el={el}
@@ -374,6 +486,7 @@ export function Canvas({
             .filter((w) => w.repeatOnEveryPage || (w.page || 1) === currentPage)
             .map((w) => (
             <WindowView
+              theme={layout.theme}
               key={w.id}
               win={w}
               zoom={zoom}

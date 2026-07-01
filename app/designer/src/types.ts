@@ -21,6 +21,16 @@ export const ELEMENT_TYPES = [
   'IMAGE',
   'LINE',
   'RECTANGLE',
+  'ELLIPSE',
+  'TRIANGLE',
+  'POLYGON',
+  'ARROW',
+  'DIVIDER',
+  'CALLOUT',
+  'WATERMARK',
+  'SIGNATURE',
+  'BACKGROUND',
+  'PAGE_BORDER',
   'CHECKBOX',
   'CURRENT_DATE',
   'QR_CODE',
@@ -30,6 +40,10 @@ export const ELEMENT_TYPES = [
 export type ElementType = (typeof ELEMENT_TYPES)[number];
 
 export const FORMATS = ['text', 'date', 'currency', 'number', 'percentage'] as const;
+
+export interface GradientStop { at: number; color: string }
+/** Linear gradient fill. angle in degrees: 0 = left→right, 90 = top→bottom. */
+export interface GradientFill { type: 'linear'; angle?: number; stops: GradientStop[] }
 
 export interface LayoutElement {
   id: string;
@@ -48,9 +62,36 @@ export interface LayoutElement {
   color?: string;
   alignment?: 'left' | 'right' | 'center';
   fontFamily?: string;
-  borderStyle?: 'solid' | 'dashed' | 'dotted'; // LINE + RECTANGLE
-  // RECTANGLE
-  fill?: string;
+  borderStyle?: 'solid' | 'dashed' | 'dotted' | 'double';
+  // shapes (RECTANGLE, ELLIPSE, TRIANGLE, POLYGON, CALLOUT, BACKGROUND, ...)
+  fill?: string | GradientFill;
+  opacity?: number; // 0..1
+  // LINE / DIVIDER
+  lineStyle?: 'solid' | 'dashed' | 'dotted' | 'double';
+  orientation?: 'horizontal' | 'vertical';
+  thickness?: number; // also ARROW shaft
+  // TRIANGLE / ARROW
+  direction?: 'up' | 'down' | 'left' | 'right';
+  // POLYGON
+  sides?: number;
+  rotation?: number;
+  // ARROW
+  headSize?: number;
+  // DIVIDER
+  labelBackground?: string;
+  // CALLOUT
+  accentColor?: string;
+  accentWidth?: number;
+  padding?: number;
+  // WATERMARK
+  angle?: number;
+  fullPage?: boolean;
+  // SIGNATURE
+  showDate?: boolean;
+  dateLabel?: string;
+  labelColor?: string;
+  // PAGE_BORDER
+  inset?: number;
   borderColor?: string;
   borderWidth?: number;
   cornerRadius?: number;
@@ -111,6 +152,8 @@ export interface PageConfig {
 
 export interface Layout {
   page: PageConfig;
+  /** brand tokens: reference as '@primary' in any color field */
+  theme?: { colors?: Record<string, string> };
   pageCount?: number;
   windows: LayoutWindow[];
   /** translations: { "de": { "Invoice": "Rechnung" }, ... } */

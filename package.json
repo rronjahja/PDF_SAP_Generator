@@ -17,6 +17,7 @@
     "bwip-js": "^4.11.1",
     "express": "^4",
     "handlebars": "^4",
+    "pdfjs-dist": "3.11.174",
     "pdfkit": "^0.19.1",
     "playwright": "^1",
     "qrcode": "^1.5.4",

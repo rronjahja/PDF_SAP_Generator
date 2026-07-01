@@ -39,6 +39,39 @@ function parseJson(value, errorCode, what) {
   }
 }
 
+/** Coerces a HANA LOB value (string | Buffer | stream) into a UTF-8 string. */
+async function lobToString(v) {
+  if (v === null || v === undefined) return v;
+  if (typeof v === 'string') return v;
+  if (Buffer.isBuffer(v)) return v.toString('utf8');
+  if (typeof v.pipe === 'function' || typeof v[Symbol.asyncIterator] === 'function') {
+    const chunks = [];
+    for await (const c of v) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+    return Buffer.concat(chunks).toString('utf8');
+  }
+  return v;
+}
+
+/**
+ * Reads a template version's LargeString columns inside one transaction.
+ * On @cap-js/hana a LOB locator is only valid while its transaction is open;
+ * selecting it on an autocommit connection throws
+ * "invalid lob locator id (piecewise lob reading)".
+ */
+async function readVersionLobs(versionId) {
+  const { TemplateVersions } = entities();
+  return cds.tx(async (tx) => {
+    const row = await tx.run(
+      SELECT.one.from(TemplateVersions).columns('layoutJson', 'sampleDataJson').where({ ID: versionId })
+    );
+    if (!row) return {};
+    return {
+      layoutJson: await lobToString(row.layoutJson),
+      sampleDataJson: await lobToString(row.sampleDataJson)
+    };
+  });
+}
+
 /** Finds a template by UUID or by name within a tenant. */
 async function findTemplate(templateKey, tenantId) {
   const { Templates } = entities();
@@ -61,18 +94,18 @@ async function resolveVersion(template, version, { allowDraft = false } = {}) {
   const { TemplateVersions } = entities();
   if (!version || version === 'latest') {
     if (template.activeVersion_ID) {
-      const active = await SELECT.one.from(TemplateVersions).where({ ID: template.activeVersion_ID });
+      const active = await SELECT.one.from(TemplateVersions).columns('ID', 'template_ID', 'version', 'status').where({ ID: template.activeVersion_ID });
       if (active && (allowDraft || active.status === 'PUBLISHED')) return active;
     }
     const where = { template_ID: template.ID };
     if (!allowDraft) where.status = 'PUBLISHED';
-    return SELECT.one.from(TemplateVersions).where(where).orderBy('version desc');
+    return SELECT.one.from(TemplateVersions).columns('ID', 'template_ID', 'version', 'status').where(where).orderBy('version desc');
   }
   const versionNumber = Number(version);
   if (!Number.isInteger(versionNumber)) {
     throw new AppError('INVALID_INPUT_DATA', `Invalid version '${version}'. Use 'latest' or a version number.`);
   }
-  const found = await SELECT.one.from(TemplateVersions).where({ template_ID: template.ID, version: versionNumber });
+  const found = await SELECT.one.from(TemplateVersions).columns('ID', 'template_ID', 'version', 'status').where({ template_ID: template.ID, version: versionNumber });
   if (found && !allowDraft && found.status !== 'PUBLISHED') return null;
   return found;
 }
@@ -246,7 +279,7 @@ async function generate(args) {
 
     // 1. Resolve template + version
     if (templateVersionId) {
-      templateVersion = await SELECT.one.from(TemplateVersions).where({ ID: templateVersionId });
+      templateVersion = await SELECT.one.from(TemplateVersions).columns('ID', 'template_ID', 'version', 'status').where({ ID: templateVersionId });
       if (!templateVersion) {
         throw new AppError('TEMPLATE_VERSION_NOT_FOUND', `Template version '${templateVersionId}' was not found.`);
       }
@@ -266,8 +299,9 @@ async function generate(args) {
       }
     }
 
-    // 2. Validate layout
-    const layout = parseJson(templateVersion.layoutJson, 'INVALID_LAYOUT_JSON', 'layoutJson');
+    // 2. Validate layout (LOBs read in a tx so HANA locators stay valid)
+    const versionLobs = await readVersionLobs(templateVersion.ID);
+    const layout = parseJson(versionLobs.layoutJson, 'INVALID_LAYOUT_JSON', 'layoutJson');
     if (!layout) throw new AppError('INVALID_LAYOUT_JSON', 'The template version has no layoutJson.');
     const layoutResult = validateLayout(layout);
     if (!layoutResult.valid) {
@@ -277,7 +311,7 @@ async function generate(args) {
     // 3. Resolve payload (preview falls back to stored sample data)
     let payload = parseJson(args.data, 'INVALID_INPUT_DATA', 'Input data');
     if (payload === undefined && preview) {
-      payload = parseJson(templateVersion.sampleDataJson, 'INVALID_INPUT_DATA', 'sampleDataJson') || {};
+      payload = parseJson(versionLobs.sampleDataJson, 'INVALID_INPUT_DATA', 'sampleDataJson') || {};
     }
     if (payload === undefined) {
       throw new AppError('INVALID_INPUT_DATA', "Request body must contain a 'data' object with the business payload.");
@@ -388,16 +422,17 @@ async function renderHtml({ templateKey, templateVersionId, data, tenantId = 'de
   const { Templates, TemplateVersions } = entities();
   let templateVersion;
   if (templateVersionId) {
-    templateVersion = await SELECT.one.from(TemplateVersions).where({ ID: templateVersionId });
+    templateVersion = await SELECT.one.from(TemplateVersions).columns('ID', 'template_ID', 'version', 'status').where({ ID: templateVersionId });
   } else {
     const template = await findTemplate(templateKey, tenantId);
     if (!template) throw new AppError('TEMPLATE_NOT_FOUND', `Template '${templateKey}' was not found.`);
     templateVersion = await resolveVersion(template, 'latest', { allowDraft: true });
   }
   if (!templateVersion) throw new AppError('TEMPLATE_VERSION_NOT_FOUND', 'Template version was not found.');
-  const layout = parseJson(templateVersion.layoutJson, 'INVALID_LAYOUT_JSON', 'layoutJson');
+  const versionLobs = await readVersionLobs(templateVersion.ID);
+  const layout = parseJson(versionLobs.layoutJson, 'INVALID_LAYOUT_JSON', 'layoutJson');
   const payload = parseJson(data, 'INVALID_INPUT_DATA', 'Input data')
-    || parseJson(templateVersion.sampleDataJson, 'INVALID_INPUT_DATA', 'sampleDataJson')
+    || parseJson(versionLobs.sampleDataJson, 'INVALID_INPUT_DATA', 'sampleDataJson')
     || {};
   return renderDocument(layout, payload, renderOptions(locale));
 }
