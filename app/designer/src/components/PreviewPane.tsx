@@ -13,6 +13,7 @@ export function PreviewPane({
   locale: string;
 }) {
   const [html, setHtml] = useState('');
+  const [zoom, setZoom] = useState(34);
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -34,7 +35,7 @@ export function PreviewPane({
         const r = await api.renderHtml(layout, data, locale);
         if (mySeq !== seq.current) return; // stale
         // scale the A4 page down to the pane width (sandboxed iframe: CSS only)
-        const zoomCss = '<style>html{zoom:0.34;background:#9a9a9a}.page{margin:6px auto;box-shadow:0 2px 14px rgba(0,0,0,0.35)}</style>';
+        const zoomCss = `<style>html{zoom:${zoom / 100};background:#9a9a9a}.page{margin:6px auto;box-shadow:0 2px 14px rgba(0,0,0,0.35)}</style>`;
         setHtml(r.html.replace('</head>', zoomCss + '</head>'));
         setPages(r.pages);
         setError(null);
@@ -45,12 +46,18 @@ export function PreviewPane({
       }
     }, 700);
     return () => clearTimeout(timer.current);
-  }, [layout, sampleData, locale]);
+  }, [layout, sampleData, locale, zoom]);
 
   return (
     <div className="preview-pane">
       <div className="cols-head">
         <span>Live preview{pages ? ` · ${pages} page${pages === 1 ? '' : 's'}` : ''}</span>
+        <span className="spacer" />
+        <span className="zoom-ctl">
+          <button title="Zoom out" onClick={() => setZoom((z) => Math.max(20, z - 15))}>−</button>
+          <button title="Fit to panel" onClick={() => setZoom(34)}>{zoom}%</button>
+          <button title="Zoom in" onClick={() => setZoom((z) => Math.min(200, z + 15))}>+</button>
+        </span>
         <span className={`live-dot${pending ? ' busy' : ''}`} title={pending ? 'Rendering…' : 'Up to date'} />
       </div>
       {error && <p className="issue error">{error}</p>}

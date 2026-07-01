@@ -242,6 +242,45 @@ cds.on('bootstrap', (app) => {
       }
     });
 
+  /** Hosted action pages: the URLs behind ACTION_BUTTON / ACTION_QR / ACTION_LINK in PDFs. */
+  const actions = require('./lib/actions');
+  app.get('/action/:token', async (req, res) => {
+    try {
+      const v = await actions.loadValidAction(req.params.token, req.ip);
+      if (v.action) {
+        const { ActionLogs } = cds.entities('pdfforms');
+        await INSERT.into(ActionLogs).entries({ ID: cds.utils.uuid(), action: v.action.ID, event: 'VIEW', ip: String(req.ip || '').slice(0, 64), createdAt: new Date().toISOString() });
+      }
+      res.type('html').send(actions.actionPage({ error: v.error, action: v.action, token: req.params.token }));
+    } catch (err) {
+      res.status(500).type('html').send(actions.actionPage({ error: 'Something went wrong — try again later.' }));
+    }
+  });
+  app.post('/action/:token/execute', async (req, res) => {
+    try {
+      const v = await actions.loadValidAction(req.params.token, req.ip);
+      if (v.error) return res.status(400).json({ ok: false, result: v.error });
+      const out = await actions.executeAction(v.action, req.body || {}, req.ip);
+      res.status(out.ok ? 200 : 502).json(out);
+    } catch (err) {
+      res.status(500).json({ ok: false, result: 'Internal error.' });
+    }
+  });
+  /** Action history timeline for a document (used by the UI, requires login via approuter). */
+  app.get('/api/v1/documents/:id/actions', async (req, res) => {
+    try {
+      const { DocumentActions, ActionLogs } = cds.entities('pdfforms');
+      const acts = await SELECT.from(DocumentActions)
+        .columns('ID', 'type', 'label', 'status', 'expiresAt', 'usedAt', 'result')
+        .where({ documentId: req.params.id }).orderBy('expiresAt desc');
+      const ids = acts.map((a) => a.ID);
+      const logs = ids.length ? await SELECT.from(ActionLogs)
+        .columns('action', 'event', 'detail', 'ip', 'createdAt')
+        .where({ action: { in: ids } }).orderBy('createdAt desc').limit(200) : [];
+      res.json({ actions: acts, logs });
+    } catch (err) { sendError(res, err); }
+  });
+
   /**
    * Headline feature: import a PDF and auto-extract an editable template.
    * Send the PDF as the raw body (Content-Type: application/pdf) with

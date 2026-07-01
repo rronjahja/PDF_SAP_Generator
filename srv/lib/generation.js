@@ -72,6 +72,56 @@ async function readVersionLobs(versionId) {
   });
 }
 
+/** Loads layout.fonts ([{ name, assetId }]) as Buffers — LargeBinary read inside a tx. */
+async function loadCustomFonts(layout) {
+  if (!Array.isArray(layout.fonts) || !layout.fonts.length) return undefined;
+  const { Assets } = entities();
+  const wanted = layout.fonts.filter((f) => f && f.name && f.assetId).slice(0, 10);
+  if (!wanted.length) return undefined;
+  return cds.tx(async (tx) => {
+    const out = {};
+    for (const f of wanted) {
+      const row = await tx.run(SELECT.one.from(Assets).columns('ID', 'content').where({ ID: f.assetId }));
+      if (!row || row.content == null) continue;
+      let b = row.content;
+      if (typeof b === 'string') b = Buffer.from(b, 'base64');
+      else if (!Buffer.isBuffer(b) && (typeof b.pipe === 'function' || typeof b[Symbol.asyncIterator] === 'function')) {
+        const chunks = [];
+        for await (const c of b) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+        b = Buffer.concat(chunks);
+      }
+      if (Buffer.isBuffer(b)) out[f.name] = b;
+    }
+    return Object.keys(out).length ? out : undefined;
+  });
+}
+
+/** Loads every IMAGE element's assetId as a Buffer — LargeBinary read inside a tx. */
+async function loadAssetImages(layout) {
+  const ids = new Set();
+  for (const win of layout.windows || []) for (const el of win.elements || []) {
+    if (el.type === 'IMAGE' && el.assetId) ids.add(el.assetId);
+  }
+  if (!ids.size) return undefined;
+  const { Assets } = entities();
+  return cds.tx(async (tx) => {
+    const out = {};
+    for (const id of [...ids].slice(0, 30)) {
+      const row = await tx.run(SELECT.one.from(Assets).columns('ID', 'content').where({ ID: id }));
+      if (!row || row.content == null) continue;
+      let b = row.content;
+      if (typeof b === 'string') b = Buffer.from(b, 'base64');
+      else if (!Buffer.isBuffer(b) && (typeof b.pipe === 'function' || typeof b[Symbol.asyncIterator] === 'function')) {
+        const chunks = [];
+        for await (const c of b) chunks.push(Buffer.isBuffer(c) ? c : Buffer.from(c));
+        b = Buffer.concat(chunks);
+      }
+      if (Buffer.isBuffer(b)) out[id] = b;
+    }
+    return Object.keys(out).length ? out : undefined;
+  });
+}
+
 /** Finds a template by UUID or by name within a tenant. */
 async function findTemplate(templateKey, tenantId) {
   const { Templates } = entities();
@@ -329,9 +379,23 @@ async function generate(args) {
     }
 
     // 5. Render the PDF — Chromium-free pdfkit backend, or the HTML + Chromium pipeline
+    const documentId = uuidv4();
+    let actionUrls;
+    try {
+      const { prepareActions } = require('./actions');
+      actionUrls = await prepareActions(layout, { tenantId, templateId: template.ID, documentId });
+    } catch (e) {
+      throw new AppError('INVALID_LAYOUT_JSON', `Action element error: ${e.message}`);
+    }
     let pdfBuffer;
     if ((process.env.PDF_ENGINE || 'chromium').toLowerCase() === 'pdfkit') {
-      pdfBuffer = await renderPdf(layout, payload, renderOptions(locale));
+      pdfBuffer = await renderPdf(layout, payload, {
+        ...renderOptions(locale),
+        customFonts: await loadCustomFonts(layout),
+        assetImages: await loadAssetImages(layout),
+        metadata: { title: (layout.metadata && layout.metadata.title) || template.name },
+        actionUrls
+      });
     } else {
       const { html } = await renderDocument(layout, payload, renderOptions(locale));
       pdfBuffer = await htmlToPdf(html, { format: layout.page && layout.page.format });
@@ -339,7 +403,6 @@ async function generate(args) {
 
     // 6. Persist results
     const durationMs = Date.now() - startedAt;
-    const documentId = uuidv4();
     const finalFileName =
       fileName ||
       (template.fileNamePattern

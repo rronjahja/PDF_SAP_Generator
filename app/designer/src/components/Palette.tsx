@@ -40,9 +40,18 @@ export function Palette({
       {WINDOW_TYPES.map((t) => (
         <PaletteItem key={t} id={`new-window:${t}`} label={pretty(t)} />
       ))}
-      <h3>Elements</h3>
-      {ELEMENT_TYPES.map((t) => (
-        <PaletteItem key={t} id={`new-el:${t}`} label={pretty(t)} el />
+      {([
+        ['Content', ['TEXT', 'IMAGE', 'CHECKBOX', 'CURRENT_DATE', 'PAGE_NUMBER']],
+        ['Shapes', ['RECTANGLE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'LINE', 'DIVIDER', 'CALLOUT']],
+        ['Codes & actions', ['QR_CODE', 'BARCODE', 'ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK']],
+        ['Page décor', ['WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER']]
+      ] as [string, string[]][]).map(([group, types]) => (
+        <details key={group} open={group === 'Content' || group === 'Shapes'}>
+          <summary className="pal-group">{group}</summary>
+          {types.filter((t) => (ELEMENT_TYPES as readonly string[]).includes(t)).map((t) => (
+            <PaletteItem key={t} id={`new-el:${t}`} label={pretty(t)} el />
+          ))}
+        </details>
       ))}
       {blocks.length > 0 && (
         <>

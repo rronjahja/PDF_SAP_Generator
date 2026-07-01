@@ -31,6 +31,9 @@ export const ELEMENT_TYPES = [
   'SIGNATURE',
   'BACKGROUND',
   'PAGE_BORDER',
+  'ACTION_BUTTON',
+  'ACTION_QR',
+  'ACTION_LINK',
   'CHECKBOX',
   'CURRENT_DATE',
   'QR_CODE',
@@ -92,6 +95,16 @@ export interface LayoutElement {
   labelColor?: string;
   // PAGE_BORDER
   inset?: number;
+  // ACTION_* (interactive hosted actions in the generated PDF)
+  actionType?: 'approve' | 'reject' | 'submit' | 'webhook' | 'open-url';
+  webhookUrl?: string;
+  href?: string;              // open-url: plain external link
+  description?: string;       // shown on the hosted action page
+  successMessage?: string;    // shown after the action succeeds
+  confirmLabel?: string;      // hosted page button text
+  expiresInDays?: number;
+  oneTime?: boolean;
+  scope?: string;
   borderColor?: string;
   borderWidth?: number;
   cornerRadius?: number;
@@ -154,6 +167,12 @@ export interface Layout {
   page: PageConfig;
   /** brand tokens: reference as '@primary' in any color field */
   theme?: { colors?: Record<string, string> };
+  /** custom fonts: uploaded as assets (.ttf/.otf), embedded by the server renderer */
+  fonts?: { name: string; assetId: string }[];
+  /** PDF document properties, shown in viewers and used for search/archiving */
+  metadata?: { title?: string; author?: string; subject?: string; keywords?: string };
+  /** output options: pdfA emits tagged PDF/A-3b for archiving/accessibility */
+  output?: { pdfA?: boolean };
   pageCount?: number;
   windows: LayoutWindow[];
   /** translations: { "de": { "Invoice": "Rechnung" }, ... } */

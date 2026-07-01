@@ -321,6 +321,37 @@ export function Designer({
             setSelection({ kind: 'element', windowId: win.id, elementId: newId });
           }
         }
+      } else if (mod && e.key === 'c' && selection && !editingField) {
+        e.preventDefault();
+        const w = state.layout.windows.find((x) => x.id === selection.windowId);
+        if (selection.kind === 'window') {
+          if (w) clipboard.current = { kind: 'window', data: JSON.parse(JSON.stringify(w)) };
+        } else {
+          const el = w?.elements?.find((x) => x.id === selection.elementId);
+          if (el) clipboard.current = { kind: 'element', data: JSON.parse(JSON.stringify(el)) };
+        }
+      } else if (mod && e.key === 'v' && clipboard.current && !readOnly && !editingField) {
+        e.preventDefault();
+        const clip = clipboard.current;
+        if (clip.kind === 'window') {
+          const src = clip.data as LayoutWindow;
+          const newId = nextWindowId(state.layout);
+          dispatch({ type: 'add-window', window: { ...src, id: newId, name: src.name ? `${src.name} copy` : undefined, x: src.x + 12, y: src.y + 12 } });
+          setSelection({ kind: 'window', windowId: newId });
+        } else {
+          const targetId = selection?.windowId ?? state.layout.windows[0]?.id;
+          const win = state.layout.windows.find((x) => x.id === targetId);
+          if (win) {
+            const src = clip.data as LayoutElement;
+            const newId = nextElementId(win, src.type);
+            const el: LayoutElement = { ...src, id: newId, ...(typeof src.x === 'number' ? { x: (src.x ?? 0) + 8, y: (src.y ?? 0) + 8 } : {}) };
+            dispatch({ type: 'add-element', windowId: win.id, element: el });
+            setSelection({ kind: 'element', windowId: win.id, elementId: newId });
+          }
+        }
+      } else if (mod && (e.key === ']' || e.key === '[') && selection?.kind === 'element' && !readOnly && !editingField) {
+        e.preventDefault();
+        dispatch({ type: 'reorder-element', windowId: selection.windowId, elementId: selection.elementId, direction: e.key === ']' ? 1 : -1 });
       } else if (/^Arrow/.test(e.key) && selection && !readOnly && !editingField) {
         e.preventDefault();
         const step = e.shiftKey ? 10 : 1;
@@ -345,6 +376,8 @@ export function Designer({
         if (selection.kind === 'element')
           dispatch({ type: 'remove-element', windowId: selection.windowId, elementId: selection.elementId });
         else dispatch({ type: 'remove-window', id: selection.windowId });
+        setSelection(null);
+      } else if (e.key === 'Escape' && selection && !editingField) {
         setSelection(null);
       }
     };
@@ -401,8 +434,23 @@ export function Designer({
       .find((w) => xPt >= w.x && xPt <= w.x + w.width && yPt >= w.y && yPt <= w.y + w.height);
 
   const [themeOpen, setThemeOpen] = useState(false);
+  const clipboard = useRef<{ kind: 'window' | 'element'; data: LayoutWindow | LayoutElement } | null>(null);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  const [sideW, setSideW] = useState(296);
+  const sideDrag = useRef<{ x: number; w: number } | null>(null);
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      if (!sideDrag.current) return;
+      setSideW(Math.min(720, Math.max(240, sideDrag.current.w + (sideDrag.current.x - e.clientX))));
+    };
+    const up = () => { sideDrag.current = null; document.body.style.cursor = ''; };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+  }, []);
   const addElementTo = (win: LayoutWindow, type: ElementType, atX?: number, atY?: number) => {
-    const noBinding = ['LINE', 'PAGE_NUMBER', 'RECTANGLE', 'CURRENT_DATE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER'].includes(type);
+    const noBinding = ['LINE', 'PAGE_NUMBER', 'RECTANGLE', 'CURRENT_DATE', 'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER', 'ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK'].includes(type);
     const binding = noBinding ? undefined : nextBinding(state.layout, { type });
     const el: LayoutElement = {
       id: nextElementId(win, type),
@@ -429,7 +477,10 @@ export function Designer({
       ...(type === 'WATERMARK' ? { width: 180, height: 60, text: 'DRAFT' } : {}),
       ...(type === 'SIGNATURE' ? { width: 170, height: 40 } : {}),
       ...(type === 'BACKGROUND' ? { width: 90, height: 20, fill: '#f8fafc' } : {}),
-      ...(type === 'PAGE_BORDER' ? { width: 90, height: 20, inset: 14, borderWidth: 1, borderColor: '#333333' } : {})
+      ...(type === 'PAGE_BORDER' ? { width: 90, height: 20, inset: 14, borderWidth: 1, borderColor: '#333333' } : {}),
+      ...(type === 'ACTION_BUTTON' ? { width: 150, height: 34, label: '✓ Approve', actionType: 'approve' as const } : {}),
+      ...(type === 'ACTION_QR' ? { width: 80, height: 80, label: 'Scan to approve', actionType: 'approve' as const } : {}),
+      ...(type === 'ACTION_LINK' ? { width: 140, label: 'Open action', actionType: 'approve' as const, fontSize: 10 } : {})
     };
     dispatch({ type: 'add-element', windowId: win.id, element: el });
     setSelection({ kind: 'element', windowId: win.id, elementId: el.id });
@@ -664,8 +715,13 @@ export function Designer({
           {themeOpen && (
             <ThemePanel
               theme={state.layout.theme}
+              fonts={state.layout.fonts}
               readOnly={readOnly}
               onChange={(t) => dispatch({ type: 'set-theme', theme: t })}
+              onFontsChange={(f) => dispatch({ type: 'set-fonts', fonts: f })}
+              metadata={state.layout.metadata}
+              output={state.layout.output}
+              onOutputChange={(metadata, output) => dispatch({ type: 'set-output', metadata, output })}
               onClose={() => setThemeOpen(false)}
             />
           )}
@@ -760,10 +816,18 @@ export function Designer({
           onSelect={paint.on && !readOnly ? applyPaint : setSelection}
           onInspect={paint.on && !readOnly ? applyPaint : inspect}
           onResize={onResize}
+          onResizeElement={(windowId, elementId, width, height) =>
+            dispatch({ type: 'update-element', windowId, elementId, patch: { width, height } })
+          }
           onZoomDelta={(d) => zoomTo(zoom * (d > 0 ? 0.92 : 1.08))}
           registerSheet={(el) => (sheetEl.current = el)}
         />
-        <aside className="side">
+        <div
+          className="side-resizer"
+          title="Drag to resize the panel — widen it to inspect the rendered PDF"
+          onPointerDown={(e) => { sideDrag.current = { x: e.clientX, w: sideW }; document.body.style.cursor = 'col-resize'; e.preventDefault(); }}
+        />
+        <aside className="side" style={{ width: sideW }}>
           <div className="tabs">
             <button className={tab === 'props' ? 'active' : ''} onClick={() => setTab('props')}>Properties</button>
             <button className={tab === 'data' ? 'active' : ''} onClick={() => setTab('data')}>
@@ -796,6 +860,27 @@ export function Designer({
             />
           ) : (
             <DataPanel
+              bindTarget={
+                selection?.kind === 'element'
+                  ? `element ${selection.elementId}`
+                  : selection?.kind === 'window' && state.layout.windows.find((w) => w.id === selection.windowId)?.type === 'TABLE'
+                    ? `table ${selection.windowId}`
+                    : null
+              }
+              onBind={(path, isArray) => {
+                if (readOnly) return;
+                if (selection?.kind === 'element' && !isArray) {
+                  dispatch({ type: 'update-element', windowId: selection.windowId, elementId: selection.elementId, patch: { binding: path } });
+                  notify('success', `Bound to "${path}"`);
+                } else if (selection?.kind === 'window' && isArray) {
+                  const w = state.layout.windows.find((x) => x.id === selection.windowId);
+                  if (w?.type === 'TABLE') {
+                    dispatch({ type: 'update-window', id: w.id, patch: { binding: path } });
+                    notify('success', `Table rows bound to "${path}"`);
+                  } else notify('info', 'Select a TABLE window to bind an array');
+                } else if (isArray) notify('info', 'Arrays bind to TABLE windows — select one first');
+                else notify('info', 'Select an element on the sheet first');
+              }}
               sampleData={state.sampleData}
               readOnly={readOnly}
               issues={issues}
@@ -859,10 +944,29 @@ export function Designer({
         <AssetsModal
           onClose={() => { setDialog(null); setAssetTarget(null); }}
           onPick={assetTarget ? (a) => {
-            dispatch({ type: 'update-element', windowId: assetTarget.windowId, elementId: assetTarget.elementId, patch: { assetId: a.ID } });
+            const { windowId, elementId } = assetTarget;
+            dispatch({ type: 'update-element', windowId, elementId, patch: { assetId: a.ID } });
             setDialog(null);
             setAssetTarget(null);
             notify('success', `Image "${a.fileName}" assigned`);
+            // size the element to the image's ORIGINAL dimensions, scaled down to fit its window
+            const img = new Image();
+            img.onload = () => {
+              const PT = 72 / 96; // css px → pt
+              let w = img.naturalWidth * PT;
+              let h = img.naturalHeight * PT;
+              if (!w || !h) return;
+              const win = stateRef.current.layout.windows.find((x) => x.id === windowId);
+              const el = win?.elements?.find((x) => x.id === elementId);
+              if (win) {
+                const maxW = win.width - (el?.x ?? 0);
+                const maxH = win.height - (el?.y ?? 0);
+                const k = Math.min(1, maxW / w, maxH / h);
+                w *= k; h *= k;
+              }
+              dispatch({ type: 'update-element', windowId, elementId, patch: { width: Math.max(6, Math.round(w)), height: Math.max(6, Math.round(h)) } });
+            };
+            img.src = `/api/v1/assets/${a.ID}`;
           } : undefined}
         />
       )}

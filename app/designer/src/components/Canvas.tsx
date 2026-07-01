@@ -5,7 +5,7 @@ import type { Theme } from '../theme';
 import { fillToCss, resolveColor } from '../theme';
 
 /* ── shape previews (client-side mirror of the pdfkit shapes) ───────── */
-const SHAPE_TYPES = ['ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER'];
+const SHAPE_TYPES = ['ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'SIGNATURE', 'BACKGROUND', 'PAGE_BORDER', 'ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK'];
 
 function ShapePreview({ el, zoom, theme }: { el: LayoutElement; zoom: number; theme?: Theme }) {
   const w = (el.width ?? 80) * zoom;
@@ -55,6 +55,31 @@ function ShapePreview({ el, zoom, theme }: { el: LayoutElement; zoom: number; th
       </svg>
     );
   }
+  if (el.type === 'ACTION_BUTTON')
+    return (
+      <span className="abtn-prev" style={{
+        width: w, height: h, opacity: op,
+        background: fillToCss(el.fill, theme) ?? resolveColor('@primary', theme) ?? '#0a6ed1',
+        color: resolveColor(el.color, theme) ?? '#fff',
+        borderRadius: (el.cornerRadius ?? 6) * zoom,
+        fontSize: Math.max(8, (el.fontSize ?? 12) * zoom * 0.9)
+      }}>
+        {el.label || el.text || 'Open'} <em>⚡{el.actionType ?? 'approve'}</em>
+      </span>
+    );
+  if (el.type === 'ACTION_QR')
+    return (
+      <span className="aqr-prev" style={{ width: w }}>
+        <i style={{ width: w, height: h }}>▦</i>
+        <em>⚡{el.actionType ?? 'approve'}{el.label ? ` · ${el.label}` : ''}</em>
+      </span>
+    );
+  if (el.type === 'ACTION_LINK')
+    return (
+      <span className="alink-prev" style={{ color: resolveColor(el.color, theme) ?? '#0a6ed1', fontSize: Math.max(8, (el.fontSize ?? 10) * zoom) }}>
+        {el.label || el.text || 'link'} <em>⚡{el.actionType ?? 'approve'}</em>
+      </span>
+    );
   if (el.type === 'DIVIDER') {
     const c = resolveColor(el.color, theme) ?? '#D1D5DB';
     const st = el.lineStyle;
@@ -179,7 +204,8 @@ function ElementView({
   selected,
   readOnly,
   onSelect,
-  onInspect
+  onInspect,
+  onResizeElStart
 }: {
   win: LayoutWindow;
   el: LayoutElement;
@@ -189,6 +215,7 @@ function ElementView({
   readOnly: boolean;
   onSelect: () => void;
   onInspect: () => void;
+  onResizeElStart: (e: React.PointerEvent, win: LayoutWindow, el: LayoutElement) => void;
 }) {
   const abs = typeof el.x === 'number' && typeof el.y === 'number';
   const lastDown = useRef(0);
@@ -198,23 +225,23 @@ function ElementView({
   });
   const style: React.CSSProperties = abs
     ? {
-        left: (el.x as number) * zoom,
-        top: (el.y as number) * zoom,
-        ...(el.width ? { width: el.width * zoom } : {}),
-        fontSize: Math.max(7, (el.fontSize ?? 9) * zoom * 0.9),
-        fontWeight: el.bold ? 600 : 400,
-        textAlign: el.alignment,
-        fontStyle: el.italic ? "italic" : undefined,
-        color: resolveColor(el.color, theme),
-        transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined
-      }
+      left: (el.x as number) * zoom,
+      top: (el.y as number) * zoom,
+      ...(el.width ? { width: el.width * zoom } : {}),
+      fontSize: Math.max(7, (el.fontSize ?? 9) * zoom * 0.9),
+      fontWeight: el.bold ? 600 : 400,
+      textAlign: el.alignment,
+      fontStyle: el.italic ? "italic" : undefined,
+      color: resolveColor(el.color, theme),
+      transform: transform ? `translate(${transform.x}px, ${transform.y}px)` : undefined
+    }
     : {
-        fontSize: Math.max(7, (el.fontSize ?? 9) * zoom * 0.9),
-        fontWeight: el.bold ? 600 : 400,
-        textAlign: el.alignment,
-        fontStyle: el.italic ? "italic" : undefined,
-        color: resolveColor(el.color, theme)
-      };
+      fontSize: Math.max(7, (el.fontSize ?? 9) * zoom * 0.9),
+      fontWeight: el.bold ? 600 : 400,
+      textAlign: el.alignment,
+      fontStyle: el.italic ? "italic" : undefined,
+      color: resolveColor(el.color, theme)
+    };
   return (
     <div
       ref={setNodeRef}
@@ -262,6 +289,16 @@ function ElementView({
       ) : (
         elementCaption(el)
       )}
+      {selected && !readOnly && abs && typeof el.width === 'number' && (
+        <span
+          className="resize-handle el"
+          title="Drag to resize (images keep their aspect ratio — hold Shift to free it)"
+          onPointerDown={(e) => {
+            e.stopPropagation();
+            onResizeElStart(e, win, el);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -275,7 +312,8 @@ function WindowView({
   readOnly,
   onSelect,
   onInspect,
-  onResizeStart
+  onResizeStart,
+  onResizeElStart
 }: {
   win: LayoutWindow;
   zoom: number;
@@ -285,6 +323,7 @@ function WindowView({
   onSelect: (sel: Selection) => void;
   onInspect: (sel: Selection) => void;
   onResizeStart: (e: React.PointerEvent, win: LayoutWindow) => void;
+  onResizeElStart: (e: React.PointerEvent, win: LayoutWindow, el: LayoutElement) => void;
 }) {
   const selected = selection?.windowId === win.id && selection.kind === 'window';
   const lastDown = useRef(0);
@@ -357,6 +396,7 @@ function WindowView({
           (win.elements ?? []).map((el) => (
             <ElementView
               theme={theme}
+              onResizeElStart={onResizeElStart}
               key={el.id}
               win={win}
               el={el}
@@ -396,6 +436,7 @@ export function Canvas({
   onSelect,
   onInspect,
   onResize,
+  onResizeElement,
   onZoomDelta,
   registerSheet
 }: {
@@ -411,6 +452,7 @@ export function Canvas({
   onSelect: (sel: Selection) => void;
   onInspect: (sel: Selection) => void;
   onResize: (windowId: string, width: number, height: number) => void;
+  onResizeElement: (windowId: string, elementId: string, width: number, height: number) => void;
   onZoomDelta: (deltaY: number) => void;
   registerSheet: (el: HTMLDivElement | null) => void;
 }) {
@@ -435,22 +477,41 @@ export function Canvas({
     (e.target as Element).setPointerCapture(e.pointerId);
   };
 
+  const resizingEl = useRef<{ winId: string; elId: string; startX: number; startY: number; w: number; h: number; ratio: number | null } | null>(null);
+  const onResizeElStart = (e: React.PointerEvent, win: LayoutWindow, el: LayoutElement) => {
+    const w = el.width ?? 60;
+    const h = el.height ?? (el.fontSize ? el.fontSize * 1.2 : 30);
+    resizingEl.current = {
+      winId: win.id, elId: el.id, startX: e.clientX, startY: e.clientY, w, h,
+      ratio: el.type === 'IMAGE' && h > 0 ? w / h : null
+    };
+    (e.target as Element).setPointerCapture(e.pointerId);
+  };
+
   useEffect(() => {
     const move = (e: PointerEvent) => {
       const r = resizing.current;
-      if (!r) return;
-      const w = Math.max(20, r.w + (e.clientX - r.startX) / zoom);
-      const h = Math.max(15, r.h + (e.clientY - r.startY) / zoom);
-      onResize(r.id, Math.round(w / 5) * 5, Math.round(h / 5) * 5);
+      if (r) {
+        const w = Math.max(20, r.w + (e.clientX - r.startX) / zoom);
+        const h = Math.max(15, r.h + (e.clientY - r.startY) / zoom);
+        onResize(r.id, Math.round(w / 5) * 5, Math.round(h / 5) * 5);
+        return;
+      }
+      const re = resizingEl.current;
+      if (!re) return;
+      let w = Math.max(6, re.w + (e.clientX - re.startX) / zoom);
+      let h = Math.max(6, re.h + (e.clientY - re.startY) / zoom);
+      if (re.ratio && !e.shiftKey) h = w / re.ratio; // images keep aspect ratio
+      onResizeElement(re.winId, re.elId, Math.round(w), Math.round(h));
     };
-    const up = () => (resizing.current = null);
+    const up = () => { resizing.current = null; resizingEl.current = null; };
     window.addEventListener('pointermove', move);
     window.addEventListener('pointerup', up);
     return () => {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', up);
     };
-  }, [zoom, onResize]);
+  }, [zoom, onResize, onResizeElement]);
 
   return (
     <div
@@ -485,18 +546,19 @@ export function Canvas({
           {layout.windows
             .filter((w) => w.repeatOnEveryPage || (w.page || 1) === currentPage)
             .map((w) => (
-            <WindowView
-              theme={layout.theme}
-              key={w.id}
-              win={w}
-              zoom={zoom}
-              selection={selection}
-              readOnly={readOnly}
-              onSelect={onSelect}
-              onInspect={onInspect}
-              onResizeStart={onResizeStart}
-            />
-          ))}
+              <WindowView
+                theme={layout.theme}
+                onResizeElStart={onResizeElStart}
+                key={w.id}
+                win={w}
+                zoom={zoom}
+                selection={selection}
+                readOnly={readOnly}
+                onSelect={onSelect}
+                onInspect={onInspect}
+                onResizeStart={onResizeStart}
+              />
+            ))}
           {guides?.v !== undefined && <div className="guide v" style={{ left: guides.v * zoom }} />}
           {guides?.h !== undefined && <div className="guide h" style={{ top: guides.h * zoom }} />}
         </div>

@@ -1,6 +1,9 @@
 namespace pdfforms;
 
-using { cuid, managed } from '@sap/cds/common';
+using {
+  cuid,
+  managed
+} from '@sap/cds/common';
 
 /**
  * Step 2 — Database model
@@ -8,37 +11,51 @@ using { cuid, managed } from '@sap/cds/common';
  * Entities: Templates, TemplateVersions, GeneratedDocuments, Assets, GenerationLogs
  */
 
-type DocumentType : String(30) enum {
-  INVOICE; PURCHASE_ORDER; DELIVERY_NOTE; QUOTATION; REPORT; CERTIFICATE;
+type DocumentType     : String(30) enum {
+  INVOICE;
+  PURCHASE_ORDER;
+  DELIVERY_NOTE;
+  QUOTATION;
+  REPORT;
+  CERTIFICATE;
 };
 
-type TemplateStatus : String(20) enum {
-  DRAFT; ACTIVE; ARCHIVED;
+type TemplateStatus   : String(20) enum {
+  DRAFT;
+  ACTIVE;
+  ARCHIVED;
 };
 
-type VersionStatus : String(20) enum {
-  DRAFT; REVIEW; PUBLISHED; ARCHIVED;
+type VersionStatus    : String(20) enum {
+  DRAFT;
+  REVIEW;
+  PUBLISHED;
+  ARCHIVED;
 };
 
 type GenerationStatus : String(20) enum {
-  SUCCESS; ERROR; PROCESSING;
+  SUCCESS;
+  ERROR;
+  PROCESSING;
 };
 
 /** Main form template metadata */
 entity Templates : cuid, managed {
-  tenantId      : String(36) default 'default';
-  name          : String(100) @mandatory;
-  description   : String(500);
-  documentType  : DocumentType default #INVOICE;
-  status        : TemplateStatus default #DRAFT;
-  activeVersion : Association to TemplateVersions;
+  tenantId            : String(36) default 'default';
+  name                : String(100) @mandatory;
+  description         : String(500);
+  documentType        : DocumentType default #INVOICE;
+  status              : TemplateStatus default #DRAFT;
+  activeVersion       : Association to TemplateVersions;
   /** e.g. "invoice-{invoice.number}-{date}.pdf" — placeholders resolve from request data */
   fileNamePattern     : String(255);
   /** JSON array of destination names applied when a request specifies none */
   defaultDestinations : String(1000);
   defaultLocale       : String(10);
-  versions      : Composition of many TemplateVersions on versions.template = $self;
-  assets        : Composition of many Assets on assets.template = $self;
+  versions            : Composition of many TemplateVersions
+                          on versions.template = $self;
+  assets              : Composition of many Assets
+                          on assets.template = $self;
 }
 
 /**
@@ -83,8 +100,8 @@ entity Assets : cuid {
   storageUrl : String(500);
   content    : LargeBinary;
   size       : Integer;
-  createdAt  : Timestamp @cds.on.insert : $now;
-  createdBy  : String(255) @cds.on.insert : $user;
+  createdAt  : Timestamp   @cds.on.insert: $now;
+  createdBy  : String(255) @cds.on.insert: $user;
 }
 
 /** Technical generation logs */
@@ -97,8 +114,8 @@ entity GenerationLogs : cuid {
   durationMs      : Integer;
   errorCode       : String(50);
   errorMessage    : String(2000);
-  createdAt       : Timestamp @cds.on.insert : $now;
-  createdBy       : String(255) @cds.on.insert : $user;
+  createdAt       : Timestamp   @cds.on.insert: $now;
+  createdBy       : String(255) @cds.on.insert: $user;
 }
 
 /** Reusable layout blocks (windows saved for reuse across templates) */
@@ -112,20 +129,20 @@ entity Blocks : cuid, managed {
 entity VersionEvents : cuid {
   tenantId        : String(36) default 'default';
   templateVersion : Association to TemplateVersions;
-  action          : String(30);   // SUBMITTED | APPROVED | REJECTED | PUBLISHED | ARCHIVED | CREATED
+  action          : String(30); // SUBMITTED | APPROVED | REJECTED | PUBLISHED | ARCHIVED | CREATED
   comment         : String(1000);
-  createdAt       : Timestamp @cds.on.insert : $now;
-  createdBy       : String(255) @cds.on.insert : $user;
+  createdAt       : Timestamp   @cds.on.insert: $now;
+  createdBy       : String(255) @cds.on.insert: $user;
 }
 
 /** Where generated PDFs are sent: local folder, FTP/SFTP, printer, or webhook */
 entity DeliveryDestinations : cuid, managed {
-  tenantId : String(36) default 'default';
-  name     : String(60) @mandatory;
-  type     : String(20) @mandatory; // LOCAL_DIR | FTP | SFTP | PRINTER | WEBHOOK
+  tenantId   : String(36) default 'default';
+  name       : String(60) @mandatory;
+  type       : String(20) @mandatory; // LOCAL_DIR | FTP | SFTP | PRINTER | WEBHOOK
   /** type-specific settings as JSON, see README ("Delivery destinations") */
   configJson : LargeString;
-  active   : Boolean default true;
+  active     : Boolean default true;
 }
 
 /** One row per delivery attempt of a generated document */
@@ -136,5 +153,30 @@ entity Deliveries : cuid {
   type        : String(20);
   status      : String(20); // SUCCESS | FAILED
   detail      : String(2000);
-  createdAt   : Timestamp @cds.on.insert : $now;
+  createdAt   : Timestamp @cds.on.insert: $now;
+}
+
+/** Interactive PDF actions: one row per button/QR/link minted into a generated document. */
+entity DocumentActions : cuid {
+  tenantId   : String(36) default 'default';
+  type       : String(20); // approve | reject | submit | webhook
+  label      : String(100);
+  scope      : String(50);
+  configJson : String(2000); // e.g. { "webhookUrl": "https://..." }
+  templateId : String(36);
+  documentId : String(36);
+  expiresAt  : Timestamp;
+  oneTime    : Boolean default true;
+  usedAt     : Timestamp;
+  status     : String(20) default 'PENDING'; // PENDING | COMPLETED | REJECTED | FAILED
+  result     : String(2000);
+}
+
+/** Audit trail: every view/execute/success/failure of an action. */
+entity ActionLogs : cuid {
+  action    : String(36);
+  event     : String(20); // VIEW | EXECUTE | SUCCESS | FAILED | EXPIRED | REUSED | DENIED
+  detail    : String(2000);
+  ip        : String(64);
+  createdAt : Timestamp;
 }

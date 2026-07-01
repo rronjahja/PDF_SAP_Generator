@@ -19,7 +19,9 @@ const { isValidPath } = require('./binding-resolver');
 const WINDOW_TYPES = ['HEADER', 'ADDRESS', 'METADATA', 'TABLE', 'TOTALS', 'FOOTER', 'FREE_SECTION'];
 const ELEMENT_TYPES = ['TEXT', 'IMAGE', 'LINE', 'TABLE', 'QR_CODE', 'BARCODE', 'PAGE_NUMBER', 'RECTANGLE', 'CHECKBOX', 'CURRENT_DATE',
   // Phase 1 additions (styled shapes & blocks)
-  'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'BACKGROUND', 'PAGE_BORDER', 'SIGNATURE'];
+  'ELLIPSE', 'TRIANGLE', 'POLYGON', 'ARROW', 'DIVIDER', 'CALLOUT', 'WATERMARK', 'BACKGROUND', 'PAGE_BORDER', 'SIGNATURE',
+  // Phase 9: interactive actions (hosted signed URLs)
+  'ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK'];
 
 /** Page dimensions in points (layout coordinates are interpreted as pt) */
 const PAGE_FORMATS = {
@@ -79,6 +81,24 @@ function validateLayout(layout) {
       add('INVALID_LAYOUT_JSON', `${where} references theme color '${val}' but the theme does not define it.`, windowId, elementId);
     }
   };
+
+  // Metadata / output options (optional)
+  if (layout.metadata !== undefined && (typeof layout.metadata !== 'object' || Array.isArray(layout.metadata) || layout.metadata === null)) {
+    add('INVALID_LAYOUT_JSON', "'metadata' must be an object with title/author/subject/keywords strings.");
+  }
+  if (layout.output !== undefined && (typeof layout.output !== 'object' || Array.isArray(layout.output) || layout.output === null)) {
+    add('INVALID_LAYOUT_JSON', "'output' must be an object, e.g. { pdfA: true }.");
+  }
+
+  // Fonts (optional): [{ name, assetId }]
+  if (layout.fonts !== undefined) {
+    if (!Array.isArray(layout.fonts)) add('INVALID_LAYOUT_JSON', "'fonts' must be an array of { name, assetId }.");
+    else for (const [i, f] of layout.fonts.entries()) {
+      if (!f || typeof f.name !== 'string' || !f.name || typeof f.assetId !== 'string' || !f.assetId) {
+        add('INVALID_LAYOUT_JSON', `fonts[${i}] must have string 'name' and 'assetId'.`);
+      }
+    }
+  }
 
   // Windows array
   if (!Array.isArray(layout.windows) || layout.windows.length === 0) {
@@ -179,6 +199,18 @@ function validateLayout(layout) {
       }
       if (el.binding && !isValidPath(el.binding)) {
         add('INVALID_LAYOUT_JSON', `Element ${elRef} in window ${ref} has an invalid binding path '${el.binding}'.`, win.id, el.id);
+      }
+      if (['ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK'].includes(el.type)) {
+        const t = el.actionType || 'approve';
+        if (!['approve', 'reject', 'submit', 'webhook', 'open-url'].includes(t)) {
+          add('INVALID_LAYOUT_JSON', `Element ${elRef} in window ${ref} has unsupported actionType '${t}'. Supported: approve, reject, submit, webhook, open-url.`, win.id, el.id);
+        }
+        if (t === 'open-url' && !el.href) {
+          add('INVALID_LAYOUT_JSON', `Open-URL action ${elRef} in window ${ref} must have an 'href'.`, win.id, el.id);
+        }
+        if (t === 'webhook' && !el.webhookUrl) {
+          add('INVALID_LAYOUT_JSON', `Webhook action ${elRef} in window ${ref} must have a 'webhookUrl'.`, win.id, el.id);
+        }
       }
       if (el.type === 'POLYGON' && el.sides !== undefined && (!Number.isInteger(el.sides) || el.sides < 3)) {
         add('INVALID_LAYOUT_JSON', `Polygon element ${elRef} in window ${ref} must have integer 'sides' >= 3.`, win.id, el.id);

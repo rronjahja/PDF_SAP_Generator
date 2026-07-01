@@ -33,7 +33,8 @@ modules:
       ignore: ["node_modules/", ".env"]
     properties:
       PDF_STORE_DOCUMENTS: "true"
-      PDF_ENGINE: "pdfkit" # Chromium-free rendering (no headless browser on CF)
+      PDF_ENGINE: "pdfkit"          # Chromium-free rendering (no headless browser on CF)
+      ACTION_BASE_URL: ${default-url}   # hosted action pages live on this app
       # PDF_RATE_LIMIT: "60"          # optional: generations per minute per tenant
       # PDF_API_KEY: set via 'cf set-env' or a user-provided service, never in git
     provides:

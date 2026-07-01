@@ -114,7 +114,7 @@ async function extractPage(page, pageH, stats) {
     const rects = [];
     const lines = [];
     const images = [];
-    const textColors = [];
+    const colorSpans = []; // per-showText: char count + fill color, for exact color alignment
 
     const flushFill = () => {
         for (const p of path) if (p.kind === 'rect') {
@@ -179,7 +179,12 @@ async function extractPage(page, pageH, stats) {
             case OPS.stroke:
             case OPS.closeStroke: flushStroke(); break;
             case OPS.endPath: path = []; break; // clip path definition — not drawn
-            case OPS.showText: textColors.push(gs.fill); break;
+            case OPS.showText: {
+                let n = 0;
+                try { for (const g of a[0] || []) if (g && typeof g === 'object' && g.unicode) n += g.unicode.replace(/ /g, '').length; } catch { /* keep 0 */ }
+                colorSpans.push({ n, c: gs.fill });
+                break;
+            }
             case OPS.paintImageXObject:
             case OPS.paintInlineImageXObject: {
                 try {
@@ -201,11 +206,26 @@ async function extractPage(page, pageH, stats) {
     /* text: merge fragments into runs on the same baseline */
     const tc = await page.getTextContent();
     const items = [];
-    tc.items.forEach((it, idx) => {
+    // exact color lookup by character offset into the page's text stream
+    const offsets = [];
+    let acc = 0;
+    for (const sp of colorSpans) { offsets.push({ at: acc, c: sp.c }); acc += sp.n; }
+    // spaces are stripped on both sides: pdfjs synthesizes them, glyph streams may not carry them
+    const colorAt = (pos) => {
+        let c = '#111111';
+        for (const o of offsets) { if (o.at <= pos) c = o.c; else break; }
+        return c;
+    };
+    let charPos = 0;
+    tc.items.forEach((it) => {
+        const myPos = charPos;
+        charPos += (it.str || '').replace(/ /g, '').length;
         if (!it.str || !it.str.trim()) return;
         const fs = Math.hypot(it.transform[1], it.transform[3]) || Math.abs(it.transform[3]) || 10;
         let fontName = '';
         try { const f = page.commonObjs.get(it.fontName); fontName = (f && f.name) || ''; } catch { /* not resolved */ }
+        const family = /times|georgia|serif/i.test(fontName) && !/sans/i.test(fontName) ? 'Times New Roman'
+            : /courier|mono/i.test(fontName) ? 'Courier New' : undefined;
         const ascent = (tc.styles[it.fontName] && tc.styles[it.fontName].ascent) || 0.75;
         items.push({
             str: it.str,
@@ -216,7 +236,8 @@ async function extractPage(page, pageH, stats) {
             fs: round(fs),
             bold: /bold|black|heavy/i.test(fontName),
             italic: /italic|oblique/i.test(fontName),
-            color: textColors.length ? textColors[Math.min(idx, textColors.length - 1)] : '#111111'
+            family,
+            color: colorSpans.length ? colorAt(myPos) : '#111111'
         });
     });
     items.sort((p, q) => (Math.abs(p.base - q.base) < 1 ? p.x - q.x : q.base - p.base));
@@ -225,7 +246,7 @@ async function extractPage(page, pageH, stats) {
         const last = runs[runs.length - 1];
         if (
             last && Math.abs(last.base - it.base) < 1 && Math.abs(last.fs - it.fs) < 0.6 &&
-            last.bold === it.bold && last.italic === it.italic && last.color === it.color &&
+            last.bold === it.bold && last.italic === it.italic && last.color === it.color && last.family === it.family &&
             it.x - (last.x + last.w) < Math.max(1.2, last.fs * 0.4) && it.x - (last.x + last.w) > -1
         ) {
             const gap = it.x - (last.x + last.w);
@@ -304,18 +325,43 @@ async function importPdf(buffer) {
             push({
                 id: `text${++n}`, type: 'TEXT', x: round(t.x), y: t.top, text: t.str,
                 fontSize: t.fs, ...(t.bold ? { bold: true } : {}), ...(t.italic ? { italic: true } : {}),
+                ...(t.family ? { fontFamily: t.family } : {}),
                 ...(t.color && t.color !== '#000000' && t.color !== '#111111' ? { color: t.color } : {})
             });
         }
 
+        // structure detection: split into HEADER / body / FOOTER windows by vertical band
+        const headerH = Math.round(pageH * 0.17);
+        const footerY = Math.round(pageH * 0.9);
+        const bandOf = (el) => {
+            const h = el.height || (el.fontSize ? el.fontSize * 1.2 : 12);
+            const cy = (el.y || 0) + h / 2;
+            if ((el.y || 0) === 0 && h >= pageH * 0.9) return 'body'; // full-page background
+            if (cy <= headerH) return 'header';
+            if (cy >= footerY) return 'footer';
+            return 'body';
+        };
+        const bands = { header: [], body: [], footer: [] };
+        for (const el of elements) bands[bandOf(el)].push(el);
+        const idBase = p === 1 ? '' : String(p);
+        if (bands.header.length) {
+            windows.push({
+                id: `H${idBase || 1}`, name: `Header (page ${p})`, type: 'HEADER',
+                x: 0, y: 0, width: pageW, height: headerH, page: p, elements: bands.header
+            });
+        }
         windows.push({
             id: String.fromCharCode(64 + Math.min(p, 26)) + (p > 26 ? p : ''),
-            name: `Imported page ${p}`,
-            type: 'FREE_SECTION',
-            x: 0, y: 0, width: pageW, height: pageH,
-            page: p,
-            elements
+            name: `Imported page ${p}`, type: 'FREE_SECTION',
+            x: 0, y: 0, width: pageW, height: pageH, page: p, elements: bands.body
         });
+        if (bands.footer.length) {
+            windows.push({
+                id: `F${idBase || 1}`, name: `Footer (page ${p})`, type: 'FOOTER',
+                x: 0, y: footerY, width: pageW, height: pageH - footerY, page: p,
+                elements: bands.footer.map((el) => ({ ...el, y: Math.max(0, (el.y || 0) - footerY) }))
+            });
+        }
     }
 
     const layout = {

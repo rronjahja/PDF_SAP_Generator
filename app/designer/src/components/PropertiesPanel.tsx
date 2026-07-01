@@ -1,4 +1,5 @@
 import type { Dispatch } from 'react';
+import { useState } from 'react';
 import { nextBinding } from '../data-utils';
 import type { EditorAction } from '../state';
 import type { Layout, LayoutElement, LayoutWindow, Selection, TableColumn } from '../types';
@@ -62,6 +63,31 @@ function FillEditor({ value, theme, readOnly, onChange }: {
         </>
       )}
     </>
+  );
+}
+
+/** Tiny helper that composes a valid expr.js condition (path op value). */
+function ConditionBuilder({ onApply }: { onApply: (expr: string) => void }) {
+  const [p, setP] = useState('');
+  const [op, setOp] = useState('==');
+  const [v, setV] = useState('');
+  const compose = () => {
+    if (!p.trim()) return;
+    if (op === 'truthy') return onApply(p.trim());
+    const raw = v.trim();
+    const lit = raw === '' ? "''" : /^(true|false|\d+(\.\d+)?)$/.test(raw) ? raw : `'${raw.replace(/'/g, "\\'")}'`;
+    onApply(`${p.trim()} ${op} ${lit}`);
+  };
+  return (
+    <div className="cond-builder">
+      <input className="mono" placeholder="field e.g. invoice.status" value={p} onChange={(e) => setP(e.target.value)} />
+      <select value={op} onChange={(e) => setOp(e.target.value)}>
+        <option>==</option><option>!=</option><option>&gt;</option><option>&lt;</option><option>&gt;=</option><option>&lt;=</option>
+        <option value="truthy">is set</option>
+      </select>
+      <input className="mono" placeholder="value" value={v} disabled={op === 'truthy'} onChange={(e) => setV(e.target.value)} />
+      <button className="linkish" onClick={compose}>Set</button>
+    </div>
   );
 }
 
@@ -186,6 +212,7 @@ function ElementForm({
   win,
   el,
   theme,
+  customFonts = [],
   readOnly,
   dispatch,
   onSelect,
@@ -194,6 +221,7 @@ function ElementForm({
   win: LayoutWindow;
   el: LayoutElement;
   theme?: Theme;
+  customFonts?: string[];
   readOnly: boolean;
   dispatch: Dispatch<EditorAction>;
   onSelect: (s: Selection) => void;
@@ -228,10 +256,34 @@ function ElementForm({
           <Row label="URL"><Txt value={el.url} disabled={readOnly} mono placeholder="https://… (or use an asset)" onChange={(v) => patch({ url: v })} /></Row>
           <Row label="Fit">
             <select value={el.fit ?? 'auto'} disabled={readOnly} onChange={(e) => patch({ fit: e.target.value === 'auto' ? undefined : (e.target.value as LayoutElement['fit']) })}>
-              <option value="auto">natural size</option>
+              <option value="auto">stretch to box</option>
               <option value="contain">contain</option>
               <option value="cover">cover</option>
             </select>
+          </Row>
+          <div className="prow2">
+            <Row label="W (cm)">
+              <Num value={el.width !== undefined ? Math.round((el.width / 28.3465) * 100) / 100 : undefined} disabled={readOnly}
+                onChange={(v) => v !== undefined && patch({ width: Math.max(6, Math.round(v * 28.3465)) })} />
+            </Row>
+            <Row label="H (cm)">
+              <Num value={el.height !== undefined ? Math.round((el.height / 28.3465) * 100) / 100 : undefined} disabled={readOnly}
+                onChange={(v) => v !== undefined && patch({ height: Math.max(6, Math.round(v * 28.3465)) })} />
+            </Row>
+          </div>
+          <Row label="Size">
+            <button className="linkish" disabled={readOnly || !el.assetId} onClick={() => {
+              const img = new Image();
+              img.onload = () => {
+                const PT = 72 / 96;
+                let w = img.naturalWidth * PT, h = img.naturalHeight * PT;
+                if (!w || !h) return;
+                const maxW = win.width - (el.x ?? 0), maxH = win.height - (el.y ?? 0);
+                const k = Math.min(1, maxW / w, maxH / h);
+                patch({ width: Math.max(6, Math.round(w * k)), height: Math.max(6, Math.round(h * k)) });
+              };
+              img.src = `/api/v1/assets/${el.assetId}`;
+            }}>↺ original size{' '}(fit window)</button>
           </Row>
         </>
       )}
@@ -339,6 +391,53 @@ function ElementForm({
           </Row>
         </>
       )}
+      {['ACTION_BUTTON', 'ACTION_QR', 'ACTION_LINK'].includes(el.type) && (
+        <>
+          <Row label="Action">
+            <select value={el.actionType ?? 'approve'} disabled={readOnly}
+              onChange={(e) => patch({ actionType: e.target.value as LayoutElement['actionType'] })}>
+              <option value="approve">approve</option>
+              <option value="reject">reject</option>
+              <option value="submit">submit data</option>
+              <option value="webhook">call webhook</option>
+              <option value="open-url">open a URL (no hosted page)</option>
+            </select>
+          </Row>
+          {el.actionType === 'webhook' && (
+            <Row label="Webhook URL">
+              <Txt value={el.webhookUrl} disabled={readOnly} mono placeholder="https://…" onChange={(v) => patch({ webhookUrl: v })} />
+            </Row>
+          )}
+          {el.actionType === 'open-url' ? (
+            <Row label="Link URL">
+              <Txt value={el.href} disabled={readOnly} mono placeholder="https://portal.example.com/…" onChange={(v) => patch({ href: v })} />
+            </Row>
+          ) : (
+            <>
+              <Row label="Explain">
+                <Txt value={el.description} disabled={readOnly} placeholder="What happens when they act (shown on the page)" onChange={(v) => patch({ description: v })} />
+              </Row>
+              <div className="prow2">
+                <Row label="Button text"><Txt value={el.confirmLabel} disabled={readOnly} placeholder="e.g. Release order" onChange={(v) => patch({ confirmLabel: v })} /></Row>
+                <Row label="Success msg"><Txt value={el.successMessage} disabled={readOnly} placeholder="e.g. Order released!" onChange={(v) => patch({ successMessage: v })} /></Row>
+              </div>
+            </>
+          )}
+          <div className="prow2">
+            <Row label="Expires (d)"><Num value={el.expiresInDays ?? 30} disabled={readOnly} min={1} onChange={(v) => patch({ expiresInDays: v })} /></Row>
+            <Row label="One-time">
+              <input type="checkbox" checked={el.oneTime !== false} disabled={readOnly}
+                onChange={(e) => patch({ oneTime: e.target.checked ? undefined : false })} />
+            </Row>
+          </div>
+          <p className="palette-hint" style={{ margin: '2px 0 6px' }}>
+            On generate, this mints a signed hosted URL. The recipient opens it (tap/scan) and the action executes with full audit logging.
+          </p>
+          {el.type === 'ACTION_BUTTON' && (
+            <FillEditor value={el.fill} theme={theme} readOnly={readOnly} onChange={(v) => patch({ fill: v })} />
+          )}
+        </>
+      )}
       {el.type === 'PAGE_BORDER' && (
         <>
           <div className="prow2">
@@ -377,6 +476,7 @@ function ElementForm({
         <Row label="Font">
           <select value={el.fontFamily ?? 'Helvetica'} disabled={readOnly} onChange={(e) => patch({ fontFamily: e.target.value === 'Helvetica' ? undefined : e.target.value })}>
             {FONT_FAMILIES.map((f) => <option key={f}>{f}</option>)}
+            {customFonts.map((f) => <option key={f} value={f}>{f} (custom)</option>)}
           </select>
         </Row>
       )}
@@ -450,6 +550,25 @@ function ElementForm({
       )}
       <Row label="Visible if">
         <Txt value={el.visibleIf} disabled={readOnly} mono placeholder="discount > 0" onChange={(v) => patch({ visibleIf: v })} />
+      </Row>
+      {!readOnly && <ConditionBuilder onApply={(expr) => patch({ visibleIf: expr })} />}
+      {positioned && (
+        <Row label="Align">
+          <span className="align-row">
+            <button title="Align left" disabled={readOnly} onClick={() => patch({ x: 0 })}>⇤</button>
+            <button title="Center horizontally" disabled={readOnly} onClick={() => patch({ x: Math.max(0, Math.round((win.width - (el.width ?? 0)) / 2)) })}>↔</button>
+            <button title="Align right" disabled={readOnly} onClick={() => patch({ x: Math.max(0, Math.round(win.width - (el.width ?? 0))) })}>⇥</button>
+            <button title="Align top" disabled={readOnly} onClick={() => patch({ y: 0 })}>⤒</button>
+            <button title="Center vertically" disabled={readOnly} onClick={() => patch({ y: Math.max(0, Math.round((win.height - (el.height ?? (el.fontSize ?? 10) * 1.2)) / 2)) })}>↕</button>
+            <button title="Align bottom" disabled={readOnly} onClick={() => patch({ y: Math.max(0, Math.round(win.height - (el.height ?? (el.fontSize ?? 10) * 1.2))) })}>⤓</button>
+          </span>
+        </Row>
+      )}
+      <Row label="Arrange">
+        <span className="align-row">
+          <button title="Send backward (Ctrl+[)" disabled={readOnly} onClick={() => dispatch({ type: 'reorder-element', windowId: win.id, elementId: el.id, direction: -1 })}>▼ Back</button>
+          <button title="Bring forward (Ctrl+])" disabled={readOnly} onClick={() => dispatch({ type: 'reorder-element', windowId: win.id, elementId: el.id, direction: 1 })}>▲ Front</button>
+        </span>
       </Row>
       <div className="btn-row">
         <button
@@ -682,7 +801,7 @@ export function PropertiesPanel({
       ? win.elements?.find((e) => e.id === selection.elementId)
       : undefined;
 
-  if (el && win) return <ElementForm win={win} el={el} theme={layout.theme} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onPickAsset={onPickAsset} />;
+  if (el && win) return <ElementForm win={win} el={el} theme={layout.theme} customFonts={(layout.fonts ?? []).map((f) => f.name)} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onPickAsset={onPickAsset} />;
   if (win) return <WindowForm layout={layout} win={win} readOnly={readOnly} dispatch={dispatch} onSelect={onSelect} onSaveBlock={onSaveBlock} />;
 
   return (

@@ -34,6 +34,8 @@ export type EditorAction =
   | { type: 'sync-data' } // add every missing binding to the JSON
   | { type: 'set-page'; page: Layout['page'] }
   | { type: 'set-theme'; theme: Layout['theme'] }
+  | { type: 'set-fonts'; fonts: Layout['fonts'] }
+  | { type: 'set-output'; metadata: Layout['metadata']; output: Layout['output'] }
   | { type: 'set-page-count'; count: number }
   | { type: 'set-i18n'; i18n: Record<string, Record<string, string>> }
   | { type: 'reorder-window'; id: string; direction: 1 | -1 } // render order = z-order
@@ -42,6 +44,7 @@ export type EditorAction =
   | { type: 'remove-window'; id: string }
   | { type: 'duplicate-window'; id: string; newId: string }
   | { type: 'rename-column-binding'; windowId: string; index: number; binding: string }
+  | { type: 'reorder-element'; windowId: string; elementId: string; direction: 1 | -1 }
   | { type: 'add-element'; windowId: string; element: LayoutElement }
   | { type: 'update-element'; windowId: string; elementId: string; patch: Partial<LayoutElement> }
   | { type: 'remove-element'; windowId: string; elementId: string }
@@ -113,6 +116,13 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return push(state, { sampleData: withData(state.sampleData, (d) => ensureBindings(d, state.layout)) });
     case 'set-page':
       return push(state, { layout: { ...state.layout, page: action.page } });
+    case 'set-output': {
+      const metadata = action.metadata && Object.values(action.metadata).some((v) => v) ? action.metadata : undefined;
+      const output = action.output && action.output.pdfA ? action.output : undefined;
+      return push(state, { layout: { ...state.layout, metadata, output } });
+    }
+    case 'set-fonts':
+      return push(state, { layout: { ...state.layout, fonts: action.fonts && action.fonts.length ? action.fonts : undefined } });
     case 'set-theme':
       return push(state, { layout: { ...state.layout, theme: action.theme && Object.keys(action.theme.colors ?? {}).length ? action.theme : undefined } });
     case 'set-i18n':
@@ -218,6 +228,18 @@ export function editorReducer(state: EditorState, action: EditorAction): EditorS
       return push(state, { layout, sampleData });
     }
 
+    case 'reorder-element': {
+      const windows = state.layout.windows.map((w) => {
+        if (w.id !== action.windowId || !w.elements) return w;
+        const i = w.elements.findIndex((e) => e.id === action.elementId);
+        const j = i + action.direction;
+        if (i < 0 || j < 0 || j >= w.elements.length) return w;
+        const els = w.elements.slice();
+        [els[i], els[j]] = [els[j], els[i]];
+        return { ...w, elements: els };
+      });
+      return push(state, { layout: { ...state.layout, windows } });
+    }
     case 'add-element': {
       const layout = mapWindow(state.layout, action.windowId, (w) => ({
         ...w,

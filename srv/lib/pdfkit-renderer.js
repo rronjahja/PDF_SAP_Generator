@@ -26,7 +26,15 @@ const S = require('./style');
 
 const DEFAULT_ROW_HEIGHT = 16;
 
-function fontFor(el) {
+const CORE_FAMILIES = {
+  'times new roman': ['Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic'],
+  georgia: ['Times-Roman', 'Times-Bold', 'Times-Italic', 'Times-BoldItalic'],
+  'courier new': ['Courier', 'Courier-Bold', 'Courier-Oblique', 'Courier-BoldOblique']
+};
+function fontFor(el, doc) {
+  if (el.fontFamily && doc && doc._fonts && doc._fonts.has(el.fontFamily)) return el.fontFamily;
+  const fam = el.fontFamily && CORE_FAMILIES[String(el.fontFamily).toLowerCase()];
+  if (fam) return fam[(el.bold ? 1 : 0) + (el.italic ? 2 : 0)];
   if (el.bold && el.italic) return 'Helvetica-BoldOblique';
   if (el.bold) return 'Helvetica-Bold';
   if (el.italic) return 'Helvetica-Oblique';
@@ -71,11 +79,17 @@ function paginate(layout, data) {
 }
 
 /* ── async pre-pass: QR codes and barcodes as PNG buffers ──────────────── */
-async function generateCodes(layout, data) {
+async function generateCodes(layout, data, actionUrls) {
   const codes = new Map();
   const jobs = [];
   for (const win of layout.windows || []) {
     for (const el of win.elements || []) {
+      if (el.type === 'ACTION_QR' && actionUrls && actionUrls[el.id]) {
+        jobs.push((async () => {
+          try { codes.set(el, await QRCode.toBuffer(actionUrls[el.id], { type: 'png', margin: 1, width: 256 })); } catch { /* skip */ }
+        })());
+        continue;
+      }
       if (el.type !== 'QR_CODE' && el.type !== 'BARCODE') continue;
       let value = el.text || '';
       if (el.binding) {
@@ -112,7 +126,7 @@ async function generateCodes(layout, data) {
 /* ── element drawing ───────────────────────────────────────────────────── */
 function drawTextAt(doc, el, str, gx, gy) {
   const fs = el.fontSize || 10;
-  doc.font(fontFor(el)).fontSize(fs).fillColor(S.resolveColor(el.color, doc._theme) || '#111111');
+  doc.font(fontFor(el, doc)).fontSize(fs).fillColor(S.resolveColor(el.color, doc._theme) || '#111111');
   const opts = { lineGap: fs * 0.35 };
   if (typeof el.width === 'number') { opts.width = el.width; opts.align = el.alignment || 'left'; }
   else { opts.lineBreak = false; if (el.alignment) opts.align = el.alignment; }
@@ -127,7 +141,7 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
       if (el.label !== undefined) {
         const w = el.width || 120;
         doc.font('Helvetica').fontSize(el.fontSize || 10).fillColor('#555555').text(ctx.tr(el.label), gx, gy, { lineBreak: false });
-        doc.font(fontFor(el)).fontSize(el.fontSize || 10).fillColor(S.resolveColor(el.color, doc._theme) || '#111111').text(resolveText(el, data, ctx), gx, gy, { width: w, align: 'right', lineBreak: false });
+        doc.font(fontFor(el, doc)).fontSize(el.fontSize || 10).fillColor(S.resolveColor(el.color, doc._theme) || '#111111').text(resolveText(el, data, ctx), gx, gy, { width: w, align: 'right', lineBreak: false });
       } else {
         drawTextAt(doc, el, resolveText(el, data, ctx), gx, gy);
       }
@@ -179,6 +193,18 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
       break;
     }
     case 'IMAGE': {
+      const assetBuf = el.assetId && doc._assets[el.assetId];
+      if (assetBuf) {
+        try {
+          if (el.fit === 'contain' && el.width && el.height) doc.image(assetBuf, gx, gy, { fit: [el.width, el.height], align: 'center', valign: 'center' });
+          else if (el.fit === 'cover' && el.width && el.height) {
+            doc.save(); doc.rect(gx, gy, el.width, el.height).clip();
+            doc.image(assetBuf, gx, gy, { cover: [el.width, el.height] });
+            doc.restore();
+          } else doc.image(assetBuf, gx, gy, { width: el.width, height: el.height });
+        } catch { /* unsupported image format */ }
+        break;
+      }
       let src = el.url || el.src || '';
       if (!src && el.binding) { const { found, value } = resolvePath(data, el.binding); if (found) src = String(value); }
       if (src && src.startsWith('data:image')) {
@@ -229,6 +255,43 @@ function drawAbsoluteElement(doc, el, win, data, ctx, codes) {
       S.drawSignature(doc, { x: gx, y: gy, w: el.width || 160, h: el.height || 40 }, el, (t) => ctx.tr(t));
       break;
     }
+    case 'ACTION_BUTTON': {
+      const w = el.width || 140, h = el.height || 30;
+      const url = ctx.actionUrls[el.id];
+      const r = typeof el.cornerRadius === 'number' ? el.cornerRadius : 6;
+      const path = () => doc.roundedRect(gx, gy, w, h, r);
+      S.paintShape(doc, path, { fill: el.fill != null ? el.fill : '@primary', stroke: el.borderColor, strokeWidth: el.borderWidth || 0, opacity: el.opacity }, { x: gx, y: gy, w, h });
+      const label = ctx.tr(el.label || el.text || 'Open');
+      const fs = el.fontSize || 12;
+      doc.font(el.bold === false ? 'Helvetica' : 'Helvetica-Bold').fontSize(fs).fillColor(S.resolveColor(el.color, doc._theme) || '#FFFFFF');
+      doc.text(label, gx, gy + (h - fs) / 2 - 1, { width: w, align: 'center', lineBreak: false });
+      if (url) doc.link(gx, gy, w, h, url);
+      break;
+    }
+    case 'ACTION_QR': {
+      const png = codes.get(el);
+      const w = el.width || 70, h = el.height || 70;
+      if (png) doc.image(png, gx, gy, { width: w, height: h });
+      const url = ctx.actionUrls[el.id];
+      if (url) doc.link(gx, gy, w, h, url);
+      if (el.label) {
+        doc.font('Helvetica').fontSize(el.fontSize || 8).fillColor(S.resolveColor(el.color, doc._theme) || '#5b6470');
+        doc.text(ctx.tr(el.label), gx, gy + h + 3, { width: w, align: 'center', lineBreak: false });
+      }
+      break;
+    }
+    case 'ACTION_LINK': {
+      const url = ctx.actionUrls[el.id];
+      const label = ctx.tr(el.label || el.text || url || 'link');
+      const fs = el.fontSize || 10;
+      doc.font(fontFor(el, doc)).fontSize(fs);
+      const c = S.resolveColor(el.color, doc._theme) || '#0a6ed1';
+      const tw = doc.widthOfString(label);
+      doc.fillColor(c).text(label, gx, gy, { lineBreak: false });
+      S.drawLine(doc, gx, gy + fs * 1.15, tw, { thickness: Math.max(0.5, fs / 14), color: c });
+      if (url) doc.link(gx, gy, el.width || tw, fs * 1.3, url);
+      break;
+    }
     case 'BACKGROUND':
     case 'PAGE_BORDER':
       break; // handled at page scope in renderPdf
@@ -250,7 +313,7 @@ function drawFlowElements(doc, win, data, ctx) {
     const lineH = fs * 1.35;
     if (el.label !== undefined) {
       doc.font('Helvetica').fontSize(fs).fillColor('#555555').text(ctx.tr(el.label), innerX, cy, { lineBreak: false });
-      doc.font(fontFor(el)).fontSize(fs).fillColor(el.color || '#111111').text(resolveText(el, data, ctx), innerX, cy, { width: innerW, align: 'right', lineBreak: false });
+      doc.font(fontFor(el, doc)).fontSize(fs).fillColor(el.color || '#111111').text(resolveText(el, data, ctx), innerX, cy, { width: innerW, align: 'right', lineBreak: false });
       cy += lineH + 2;
       if (isTotals) {
         const last = i === flow.length - 1;
@@ -258,7 +321,7 @@ function drawFlowElements(doc, win, data, ctx) {
         cy += 2;
       }
     } else {
-      doc.font(fontFor(el)).fontSize(fs).fillColor(el.color || '#111111').text(resolveText(el, data, ctx), innerX, cy, { width: innerW, align: el.alignment || 'left', lineBreak: false });
+      doc.font(fontFor(el, doc)).fontSize(fs).fillColor(el.color || '#111111').text(resolveText(el, data, ctx), innerX, cy, { width: innerW, align: el.alignment || 'left', lineBreak: false });
       cy += lineH + 2;
     }
   });
@@ -356,12 +419,29 @@ async function renderPdf(layout, data, options = {}) {
   const i18n = (layout.i18n && (layout.i18n[localeFull] || layout.i18n[localeShort])) || null;
   const tr = (s) => (i18n && typeof s === 'string' && i18n[s] !== undefined ? i18n[s] : s);
 
-  const codes = await generateCodes(layout, data);
+  const codes = await generateCodes(layout, data, options.actionUrls);
+  const actionUrls = options.actionUrls || {};
   const physical = paginate(layout, data);
   const windows = layout.windows || [];
 
-  const doc = new PDFDocument({ size: [dim.width, dim.height], margin: 0 });
+  const meta = { ...(layout.metadata || {}), ...(options.metadata || {}) };
+  const info = {};
+  if (meta.title) info.Title = String(meta.title);
+  if (meta.author) info.Author = String(meta.author);
+  if (meta.subject) info.Subject = String(meta.subject);
+  if (meta.keywords) info.Keywords = String(meta.keywords);
+  const pdfA = !!(layout.output && layout.output.pdfA);
+  const doc = new PDFDocument({
+    size: [dim.width, dim.height], margin: 0, info,
+    displayTitle: !!info.Title,
+    ...(pdfA ? { subset: 'PDF/A-3b', pdfVersion: '1.7', tagged: true } : {})
+  });
   doc._theme = layout.theme || null;
+  doc._fonts = new Set();
+  doc._assets = options.assetImages || {};
+  for (const [name, buf] of Object.entries(options.customFonts || {})) {
+    try { doc.registerFont(name, buf); doc._fonts.add(name); } catch { /* invalid font file — fall back to Helvetica */ }
+  }
   const chunks = [];
   const done = new Promise((resolve, reject) => {
     doc.on('data', (c) => chunks.push(c));
@@ -378,7 +458,8 @@ async function renderPdf(layout, data, options = {}) {
       page: idx + 1,
       pages: physical.length,
       tr,
-      codes
+      codes,
+      actionUrls
     };
     if (layout.page && layout.page.background) { doc.rect(0, 0, dim.width, dim.height).fillColor(S.resolveColor(layout.page.background, doc._theme)).fill(); }
 
