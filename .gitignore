@@ -1,19 +1,13 @@
-app/designer/node_modules
-app/designer/dist
+.env
+
+node_modules/
+**/node_modules/
+
 app/designer/dist/
-app/designer/dist/*
-app/designer/dist/assets
+app/designer/dist/**
 
+gen/
+mta_archives/
 
-gen
-mta_archives
-node_modules
-
-/node_modules
-/node_modules/
-
-/test/request.http
-/test/*
-/test
-/test/
-
+test/
+test/request.http
