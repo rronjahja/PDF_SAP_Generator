@@ -33,7 +33,7 @@
     "start": "cds-serve",
     "watch": "cds watch",
     "test": "node --test test/*.test.js",
-    "build:designer": "cd app/designer && npm ci && npx vite build"
+    "build:designer": "cd app/designer && npm ci --include=optional && npm run build"
   },
   "cds": {
     "requires": {
