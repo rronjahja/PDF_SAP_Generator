@@ -1,0 +1,13 @@
+{
+    "name": "pdf-form-builder-db",
+    "version": "1.0.0",
+    "engines": {
+        "node": "^20 || ^22"
+    },
+    "dependencies": {
+        "@sap/hdi-deploy": "^5.7.0"
+    },
+    "scripts": {
+        "start": "node node_modules/@sap/hdi-deploy/deploy.js --exit"
+    }
+}
