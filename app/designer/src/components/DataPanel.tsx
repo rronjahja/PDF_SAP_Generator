@@ -1,5 +1,39 @@
 import type { Dispatch } from 'react';
+import { useState } from 'react';
 import type { ClientIssue, EditorAction } from '../state';
+import { DataSourceWizard } from './DataSourceWizard';
+
+/** "Did you mean …?" — closest existing path for a missing binding. */
+function suggestFor(missingPath: string, sampleData: string): string | null {
+  let data: unknown;
+  try { data = JSON.parse(sampleData); } catch { return null; }
+  if (!data || typeof data !== 'object') return null;
+  const paths: string[] = [];
+  const walk = (v: unknown, p: string, d: number) => {
+    if (d > 6 || paths.length > 300) return;
+    if (Array.isArray(v)) { if (v.length && typeof v[0] === 'object' && v[0] !== null) walk(v[0], p, d + 1); }
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v as Record<string, unknown>)) walk(x, p ? `${p}.${k}` : k, d + 1);
+    else if (p) paths.push(p);
+  };
+  walk(data, '', 0);
+  const dist = (a: string, b: string) => {
+    a = a.toLowerCase(); b = b.toLowerCase();
+    const m = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)]);
+    for (let j = 1; j <= b.length; j++) m[0][j] = j;
+    for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) {
+      m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+    }
+    return m[a.length][b.length];
+  };
+  const leaf = missingPath.split('.').pop() ?? missingPath;
+  let best: string | null = null;
+  let bestD = 4; // only suggest close matches
+  for (const p of paths) {
+    const d = Math.min(dist(p, missingPath), dist(p.split('.').pop() ?? p, leaf));
+    if (d < bestD) { bestD = d; best = p; }
+  }
+  return best;
+}
 
 /* ── Bindable data tree: click a field to bind it to the selection ──── */
 function flattenData(value: unknown, path = '', depth = 0, out: { path: string; kind: 'value' | 'array' | 'object'; preview: string; depth: number }[] = []) {
@@ -16,6 +50,26 @@ function flattenData(value: unknown, path = '', depth = 0, out: { path: string; 
     out.push({ path, kind: 'value', preview: String(value ?? ''), depth });
   }
   return out;
+}
+
+function ConnectSourceButton({ readOnly, dispatch }: { readOnly: boolean; dispatch: Dispatch<EditorAction> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <>
+      <button className="linkish" disabled={readOnly} title="Connect SAP OData, CDS, an API, or paste a CPI/JSON payload — generates a bindable sample" onClick={() => setOpen(true)}>
+        ⚡ Connect source
+      </button>
+      {open && (
+        <DataSourceWizard
+          onClose={() => setOpen(false)}
+          onApply={(json) => {
+            dispatch({ type: 'set-sample', sampleData: json });
+            setOpen(false);
+          }}
+        />
+      )}
+    </>
+  );
 }
 
 function DataTree({ sampleData, bindTarget, onBind }: {
@@ -120,6 +174,7 @@ export function DataPanel({
       </div>
       <div className="cols-head">
         <span>Sample data (JSON)</span>
+        <ConnectSourceButton readOnly={readOnly} dispatch={dispatch} />
         <button className="linkish" onClick={formatJson} disabled={readOnly || !jsonOk}>
           Format
         </button>
@@ -153,16 +208,21 @@ export function DataPanel({
       <div className="cols-head"><span>Checks</span></div>
       {issues === null && <p className="muted">Run checks to validate the layout and bindings against this data.</p>}
       {issues?.length === 0 && <p className="issue ok">All bindings resolve. Layout is valid.</p>}
-      {issues?.map((i, n) => (
-        <p key={n} className={`issue ${i.level}`}>
-          {i.text}
-          {i.windowId && (
-            <button className="linkish" onClick={() => onSelectWindow(i.windowId!)}>
-              show
-            </button>
-          )}
-        </p>
-      ))}
+      {issues?.map((i, n) => {
+        const missing = /['"]([A-Za-z0-9_.[\]]+)['"]/.exec(i.text);
+        const hint = missing ? suggestFor(missing[1].replace(/\[\]/g, ''), sampleData) : null;
+        return (
+          <p key={n} className={`issue ${i.level}`}>
+            {i.text}
+            {hint && hint !== missing?.[1] && <em className="issue-hint"> Did you mean <span className="mono">{hint}</span>?</em>}
+            {i.windowId && (
+              <button className="linkish" onClick={() => onSelectWindow(i.windowId!)}>
+                show
+              </button>
+            )}
+          </p>
+        );
+      })}
     </div>
   );
 }

@@ -18,7 +18,7 @@ const cds = require('@sap/cds');
 
 const generation = require('./lib/generation');
 const { sendError, AppError } = require('./lib/errors');
-const { INSERT, SELECT } = require('@sap/cds').ql;
+const { INSERT, SELECT, UPDATE, DELETE } = require('@sap/cds').ql;
 
 cds.on('bootstrap', (app) => {
   const express = require('express');
@@ -241,6 +241,71 @@ cds.on('bootstrap', (app) => {
         sendError(res, err);
       }
     });
+
+  /** Business rules CRUD (IF condition THEN action). */
+  app.get('/api/v1/rules', async (req, res) => {
+    try {
+      const { RoutingRules } = cds.entities('pdfforms');
+      const rows = await SELECT.from(RoutingRules)
+        .columns('ID', 'name', 'priority', 'condition', 'actionType', 'configJson', 'active', 'stopProcessing')
+        .where({ tenantId: 'default' }).orderBy('priority asc');
+      res.json({ rules: rows || [] });
+    } catch (err) { sendError(res, err); }
+  });
+  app.post('/api/v1/rules', async (req, res) => {
+    try {
+      const b = req.body || {};
+      const { ALL_ACTIONS } = require('./lib/rules');
+      if (!b.name || !b.condition || !ALL_ACTIONS.includes(b.actionType)) {
+        return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: `Rule needs name, condition and an actionType out of: ${ALL_ACTIONS.join(', ')}.` } });
+      }
+      try { require('./lib/expr').evaluate(String(b.condition), {}); } catch (e) {
+        return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: `Condition does not parse: ${e.message}` } });
+      }
+      const { RoutingRules } = cds.entities('pdfforms');
+      const ID = b.ID || cds.utils.uuid();
+      const row = {
+        ID, tenantId: 'default',
+        name: String(b.name).slice(0, 100),
+        priority: Number.isFinite(Number(b.priority)) ? Number(b.priority) : 100,
+        condition: String(b.condition).slice(0, 500),
+        actionType: b.actionType,
+        configJson: b.config ? JSON.stringify(b.config).slice(0, 2000) : null,
+        active: b.active !== false,
+        stopProcessing: !!b.stopProcessing
+      };
+      if (b.ID) {
+        const { ID: _skip, tenantId: _t, ...patchRow } = row;
+        await UPDATE(RoutingRules).set(patchRow).where({ ID: b.ID });
+      } else await INSERT.into(RoutingRules).entries(row);
+      res.status(b.ID ? 200 : 201).json({ rule: row });
+    } catch (err) { sendError(res, err); }
+  });
+  app.delete('/api/v1/rules/:id', async (req, res) => {
+    try {
+      const { RoutingRules } = cds.entities('pdfforms');
+      await DELETE.from(RoutingRules).where({ ID: req.params.id });
+      res.json({ deleted: req.params.id });
+    } catch (err) { sendError(res, err); }
+  });
+
+  /** SAP data binding wizard: inspect OData/CDS/JSON sources server-side (no browser CORS). */
+  app.post('/api/v1/datasource', async (req, res) => {
+    try {
+      const { mode, url, entity, username, password } = req.body || {};
+      if (!url) return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: "Provide a 'url'." } });
+      const ds = require('./lib/datasource');
+      if (mode === 'entities') return res.json({ entities: await ds.entities({ url, username, password }) });
+      if (mode === 'sample') {
+        if (!entity) return res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: "Provide an 'entity'." } });
+        return res.json({ sample: await ds.sample({ url, entity, username, password }) });
+      }
+      if (mode === 'fetch') return res.json({ sample: await ds.fetchJson({ url, username, password }) });
+      res.status(400).json({ error: { code: 'INVALID_INPUT_DATA', message: "mode must be 'entities', 'sample' or 'fetch'." } });
+    } catch (err) {
+      res.status(502).json({ error: { code: 'DATASOURCE_ERROR', message: err.message } });
+    }
+  });
 
   /** Hosted action pages: the URLs behind ACTION_BUTTON / ACTION_QR / ACTION_LINK in PDFs. */
   const actions = require('./lib/actions');

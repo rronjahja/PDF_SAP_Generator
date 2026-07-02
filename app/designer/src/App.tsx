@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { createTemplate, deleteTemplate, duplicateTemplate, importTemplatePdf, listTemplates } from './api';
 import { StatsView } from './components/StatsView';
+import { RulesView } from './components/RulesView';
 import type { Template } from './types';
 import { Designer } from './components/Designer';
 import { DestinationsView } from './components/DestinationsView';
@@ -191,7 +192,7 @@ function TemplateList({
 /* ── App shell ──────────────────────────────────────────────────────── */
 export default function App() {
   const [view, setView] = useState<
-    { page: 'list' } | { page: 'designer'; id: string } | { page: 'destinations' } | { page: 'documents' } | { page: 'stats' }
+    { page: 'list' } | { page: 'designer'; id: string } | { page: 'destinations' } | { page: 'documents' } | { page: 'stats' } | { page: 'rules' }
   >({ page: 'list' });
   const [toasts, setToasts] = useState<Toast[]>([]);
 
@@ -212,10 +213,13 @@ export default function App() {
             <span className="spacer" />
             <button onClick={() => setView({ page: 'documents' })}>Documents</button>
             <button onClick={() => setView({ page: 'stats' })}>Stats</button>
+            <button onClick={() => setView({ page: 'rules' })}>Rules</button>
             <button onClick={() => setView({ page: 'destinations' })}>Destinations</button>
           </div>
           <TemplateList onOpen={(id) => setView({ page: 'designer', id })} notify={notify} />
         </>
+      ) : view.page === 'rules' ? (
+        <RulesView onBack={() => setView({ page: 'list' })} notify={notify} />
       ) : view.page === 'stats' ? (
         <StatsView onBack={() => setView({ page: 'list' })} notify={notify} />
       ) : view.page === 'destinations' ? (

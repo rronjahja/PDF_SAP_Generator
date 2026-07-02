@@ -378,6 +378,27 @@ async function generate(args) {
       );
     }
 
+    // 4b. Business rules (render stage): template switch, logo/footer overrides, variable injection
+    let renderRulesApplied = [];
+    if (!args._ruleSwitched) {
+      try {
+        const rulesLib = require('./rules');
+        const allRules = await rulesLib.loadRules(tenantId);
+        if (allRules.length) {
+          const meta = { documentType: template.documentType, templateName: template.name, language: (locale || '').slice(0, 2).toLowerCase() };
+          const matched = rulesLib.matchRules(allRules, 'render', payload, meta);
+          const rr = rulesLib.applyRenderRules(matched, layout, payload);
+          renderRulesApplied = rr.applied;
+          if (rr.templateSwitch && rr.templateSwitch !== template.name) {
+            return generate({ ...args, templateKey: rr.templateSwitch, templateVersionId: undefined, _ruleSwitched: true });
+          }
+        }
+      } catch (e) {
+        if (e && e.code) throw e; // real app errors propagate
+        // rule evaluation must never break generation
+      }
+    }
+
     // 5. Render the PDF — Chromium-free pdfkit backend, or the HTML + Chromium pipeline
     const documentId = uuidv4();
     let actionUrls;
@@ -429,14 +450,47 @@ async function generate(args) {
       });
     }
 
-    // 7. Deliver to configured destinations (request overrides template defaults)
+    // 7. Deliver to configured destinations (request overrides template defaults),
+    //    extended by delivery-stage business rules (routing + approval gate)
     let deliveries = [];
+    let approval = null;
     if (!preview) {
       let destNames = Array.isArray(destinations) ? destinations : null;
       if (!destNames && template.defaultDestinations) {
         try { destNames = JSON.parse(template.defaultDestinations); } catch { destNames = null; }
       }
-      if (Array.isArray(destNames) && destNames.length) {
+      destNames = Array.isArray(destNames) ? destNames.slice() : [];
+
+      let approvalRule = null;
+      try {
+        const rulesLib = require('./rules');
+        const allRules = await rulesLib.loadRules(tenantId);
+        if (allRules.length) {
+          const meta = { documentType: template.documentType, templateName: template.name, language: (locale || '').slice(0, 2).toLowerCase() };
+          for (const r of rulesLib.matchRules(allRules, 'delivery', payload, meta)) {
+            if (r.actionType === 'deliver' && Array.isArray(r.config.destinations)) {
+              for (const d of r.config.destinations) if (!destNames.includes(d)) destNames.push(d);
+            } else if (r.actionType === 'require-approval' && !approvalRule) approvalRule = r;
+          }
+        }
+      } catch { /* rules must never break generation */ }
+
+      if (approvalRule) {
+        // hold all deliveries behind a signed hosted approval
+        try {
+          const { createAction } = require('./actions');
+          const a = await createAction({
+            type: 'approve',
+            label: approvalRule.config.label || `Approve dispatch of ${finalFileName}`,
+            description: destNames.length ? `Approving releases delivery to: ${destNames.join(', ')}` : undefined,
+            tenantId, templateId: template.ID, documentId,
+            expiresInDays: approvalRule.config.expiresInDays, oneTime: true
+          });
+          approval = { required: true, rule: approvalRule.name, url: a.url, heldDestinations: destNames };
+        } catch (e) {
+          approval = { required: true, rule: approvalRule.name, error: e.message, heldDestinations: destNames };
+        }
+      } else if (destNames.length) {
         deliveries = await deliverAll(destNames, tenantId, documentId, finalFileName, pdfBuffer, {
           templateName: template.name,
           documentId
@@ -460,7 +514,9 @@ async function generate(args) {
       mimeType: 'application/pdf',
       contentBase64: pdfBuffer.toString('base64'),
       status: 'SUCCESS',
-      ...(deliveries.length ? { deliveries } : {})
+      ...(deliveries.length ? { deliveries } : {}),
+      ...(approval ? { approval } : {}),
+      ...(renderRulesApplied.length ? { rulesApplied: renderRulesApplied } : {})
     };
   } catch (err) {
     const durationMs = Date.now() - startedAt;

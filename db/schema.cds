@@ -180,3 +180,15 @@ entity ActionLogs : cuid {
   ip        : String(64);
   createdAt : Timestamp;
 }
+
+/** Business rules: IF <condition over payload + _meta> THEN <action>, per tenant. */
+entity RoutingRules : cuid {
+  tenantId       : String(36) default 'default';
+  name           : String(100);
+  priority       : Integer default 100;
+  condition      : String(500); // expr.js syntax, e.g. totals.gross > 10000
+  actionType     : String(30); // use-template | set-variable | set-asset | deliver | require-approval
+  configJson     : String(2000);
+  active         : Boolean default true;
+  stopProcessing : Boolean default false;
+}
