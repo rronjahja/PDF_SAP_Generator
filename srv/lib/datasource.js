@@ -48,6 +48,25 @@ async function get(url, opts, accept) {
 /* ── tiny $metadata scanner ───────────────────────────────────────────── */
 function parseMetadata(xml) {
     const types = new Map(); // name -> { properties:[{name,type}], navs:[{name,target,collection}] }
+
+    // OData v2/v3 relations: <Association Name="FK_x"> with <End Role Type Multiplicity/> pairs,
+    // referenced from NavigationProperty via Relationship= / ToRole=.
+    const associations = new Map(); // localName -> { role: { target, collection } }
+    const assocRe = /<Association\s+[^>]*Name="([^"]+)"[^>]*>([\s\S]*?)<\/Association>/g;
+    let am;
+    while ((am = assocRe.exec(xml))) {
+        const ends = {};
+        const endRe = /<End\s+[^>]*\/?>/g;
+        let em;
+        while ((em = endRe.exec(am[2]))) {
+            const role = /Role="([^"]+)"/.exec(em[0]);
+            const type = /Type="([^"]+)"/.exec(em[0]);
+            const mult = /Multiplicity="([^"]+)"/.exec(em[0]);
+            if (role && type) ends[role[1]] = { target: type[1].split('.').pop(), collection: mult ? mult[1] === '*' : false };
+        }
+        associations.set(am[1], ends);
+    }
+
     const entityTypeRe = /<EntityType\s+[^>]*Name="([^"]+)"[^>]*>([\s\S]*?)<\/EntityType>/g;
     let m;
     while ((m = entityTypeRe.exec(xml))) {
@@ -68,11 +87,20 @@ function parseMetadata(xml) {
         while ((n = navRe.exec(body))) {
             const tag = n[0];
             const nn = /Name="([^"]+)"/.exec(tag);
-            const nt = /Type="([^"]+)"/.exec(tag); // v4; v2 uses Relationship (skipped)
-            if (nn && nt) {
+            if (!nn) continue;
+            const nt = /Type="([^"]+)"/.exec(tag); // v4 style: typed navigation
+            if (nt) {
                 const coll = /^Collection\(/.test(nt[1]);
                 const target = nt[1].replace(/^Collection\(/, '').replace(/\)$/, '').split('.').pop();
                 navs.push({ name: nn[1], target, collection: coll });
+                continue;
+            }
+            const rel = /Relationship="([^"]+)"/.exec(tag); // v2/v3 style: association reference
+            const toRole = /ToRole="([^"]+)"/.exec(tag);
+            if (rel && toRole) {
+                const ends = associations.get(rel[1].split('.').pop());
+                const end = ends && ends[toRole[1]];
+                if (end) navs.push({ name: nn[1], target: end.target, collection: end.collection });
             }
         }
         types.set(name, { properties, navs });
@@ -128,7 +156,18 @@ async function entities(opts) {
     return [...types.entries()].map(([name, t]) => ({
         name,
         fields: t.properties.length,
-        collections: t.navs.filter((n) => n.collection).map((n) => n.name)
+        fieldNames: t.properties.slice(0, 10).map((p) => p.name),
+        // 1:n relations, resolved to their target entity and its fields —
+        // this is what lets a TABLE window bind to e.g. Items[] → SalesOrderItem
+        collections: t.navs.filter((n) => n.collection).map((n) => {
+            const target = types.get(n.target);
+            return {
+                name: n.name,
+                target: n.target,
+                fields: target ? target.properties.length : 0,
+                fieldNames: target ? target.properties.slice(0, 10).map((p) => p.name) : []
+            };
+        })
     }));
 }
 
