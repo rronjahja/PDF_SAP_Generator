@@ -6,11 +6,23 @@ const ODATA = '/odata/v4/template';
 
 async function http<T>(url: string, init?: RequestInit): Promise<T> {
   const res = await fetch(url, {
-    headers: { 'Content-Type': 'application/json' },
+    credentials: 'include',
+    headers: {
+      'Accept': 'application/json',
+      'Content-Type': 'application/json',
+      ...(init?.headers || {})
+    },
     ...init
   });
+
+  if (res.status === 401) {
+    window.location.assign('/designer/');
+    throw new Error('Session expired or missing; redirecting to login');
+  }
+
   const text = await res.text();
   const body = text ? JSON.parse(text) : null;
+
   if (!res.ok) {
     const err = body?.error || {};
     const e = new Error(err.message || `${res.status} ${res.statusText}`) as Error & {
@@ -21,6 +33,7 @@ async function http<T>(url: string, init?: RequestInit): Promise<T> {
     e.details = err.details;
     throw e;
   }
+
   return body as T;
 }
 
