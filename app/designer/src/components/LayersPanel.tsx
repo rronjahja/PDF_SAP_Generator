@@ -20,8 +20,8 @@ export function LayersPanel({
 }) {
   const visible = layout.windows.filter((w) => w.repeatOnEveryPage || (w.page || 1) === currentPage);
   return (
-    <div className="layers">
-      <h3>Windows on this page</h3>
+    <details className="layers" open>
+      <summary className="pal-group">Windows on this page ({visible.length})</summary>
       {visible.length === 0 && <p className="palette-hint">Nothing here yet — drag a window in.</p>}
       {visible.map((w) => {
         const idx = layout.windows.findIndex((x) => x.id === w.id);
@@ -62,6 +62,6 @@ export function LayersPanel({
           </div>
         );
       })}
-    </div>
+    </details>
   );
 }

@@ -2303,3 +2303,502 @@ textarea.mono {
 .linkish.danger {
   color: #c0392b;
 }
+
+/* ═══ PRODUCT POLISH ═════════════════════════════════════════════════ */
+:root {
+  --brand: #0a6ed1;
+  --brand2: #0fa3c2;
+  --ink: #14181f;
+}
+
+/* landing */
+.brand-mark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: linear-gradient(135deg, var(--brand), var(--brand2));
+  color: #fff;
+  font-size: 14px;
+  margin-right: 8px;
+  box-shadow: 0 2px 6px rgba(10, 110, 209, .35);
+}
+
+.pt {
+  font-weight: 400;
+  color: #7a8494;
+  font-size: 12px;
+  margin-left: 6px;
+}
+
+.hero h1 {
+  font-size: 26px;
+  letter-spacing: -.02em;
+}
+
+.new-form input,
+.new-form select {
+  border-radius: 8px;
+}
+
+.tpl-list .row,
+.template-row {
+  border-radius: 12px;
+  transition: box-shadow .15s ease, transform .15s ease;
+}
+
+.tpl-list .row:hover,
+.template-row:hover {
+  box-shadow: 0 6px 20px rgba(16, 24, 40, .10);
+  transform: translateY(-1px);
+}
+
+/* buttons: consistent product feel */
+button {
+  border-radius: 7px;
+}
+
+button.primary {
+  background: linear-gradient(180deg, var(--brand), #085cb0);
+  border-color: #085cb0;
+  color: #fff;
+  font-weight: 600;
+  box-shadow: 0 1px 2px rgba(8, 92, 176, .35);
+}
+
+button.primary:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* toolbar dropdown menus */
+.menu-anchor {
+  position: relative;
+  display: inline-flex;
+}
+
+.menu-pop {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 70;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 2px;
+  min-width: 190px;
+  background: #fff;
+  border: 1px solid #cfd6de;
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, .18);
+  padding: 6px;
+}
+
+.menu-pop button {
+  text-align: left;
+  border: none;
+  background: none;
+  padding: 7px 10px;
+  border-radius: 6px;
+  font-size: 12.5px;
+}
+
+.menu-pop button:hover:not(:disabled) {
+  background: #eaf3fd;
+}
+
+/* left sidebar: collapsible, tidy */
+.layers>.pal-group,
+.palette summary.pal-group {
+  list-style: none;
+}
+
+.layers>.pal-group::before,
+.palette summary.pal-group::before {
+  content: '▸ ';
+  font-size: 9px;
+  color: #94a3b8;
+}
+
+details[open]>.pal-group::before {
+  content: '▾ ';
+}
+
+/* data panel: user-resizable regions */
+.data-tree {
+  resize: vertical;
+  overflow: auto;
+  height: 190px;
+  max-height: 60vh;
+  min-height: 70px;
+}
+
+.data-panel textarea,
+textarea.sample-json {
+  resize: vertical;
+  min-height: 90px;
+}
+
+.dsw {
+  resize: both;
+  overflow: auto;
+  min-width: 420px;
+  min-height: 300px;
+  max-width: 96vw;
+  max-height: 92vh;
+}
+
+/* preview: fit-to-panel scroll host */
+.preview-scroll {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+}
+
+.preview-scroll .preview-frame {
+  flex: 1;
+  border: none;
+  min-height: 100%;
+}
+
+/* modals & panels: unified elevation */
+.modal,
+.theme-panel,
+.cp-pop {
+  box-shadow: 0 18px 44px rgba(16, 24, 40, .22);
+}
+
+.toolbar {
+  backdrop-filter: saturate(1.1);
+  border-bottom: 1px solid #dbe2ea;
+}
+
+.side,
+.palette {
+  scrollbar-width: thin;
+}
+
+/* ── Data panel restructure ────────────────────────────────────────── */
+.data-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  overflow-y: auto;
+  height: 100%;
+  padding-right: 2px;
+  scrollbar-width: thin;
+}
+
+.data-panel .cols-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.data-panel .cols-head.sub span:first-child {
+  font-size: 10px;
+}
+
+.data-panel textarea {
+  min-height: 110px;
+}
+
+/* hoverable info icons instead of paragraph labels */
+.info {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  font-size: 10px;
+  color: #7a8494;
+  border: 1px solid #cfd6de;
+  cursor: help;
+  position: relative;
+  font-style: normal;
+}
+
+.info:hover,
+.info:focus {
+  color: #0a6ed1;
+  border-color: #0a6ed1;
+}
+
+.info::after {
+  content: attr(data-tip);
+  position: absolute;
+  z-index: 90;
+  top: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-60%);
+  width: 240px;
+  background: #14181f;
+  color: #f4f6f9;
+  font-size: 11px;
+  line-height: 1.45;
+  padding: 8px 10px;
+  border-radius: 8px;
+  box-shadow: 0 10px 28px rgba(16, 24, 40, .3);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity .12s ease;
+}
+
+.info:hover::after,
+.info:focus::after {
+  opacity: 1;
+}
+
+/* wizard: real modal look */
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(16, 24, 40, .42);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.dsw-head {
+  border-bottom: 1px solid #eef2f7;
+  padding-bottom: 8px;
+  margin-bottom: 8px;
+}
+
+.dsw .dsw-kinds button {
+  border-radius: 8px;
+}
+
+.dsw .dsw-kinds button.active-tool {
+  background: #eaf3fd;
+  border-color: #0a6ed1;
+  color: #085cb0;
+  font-weight: 600;
+}
+
+/* ── modal fix (portal lives outside the app root → no CSS vars there) ── */
+.modal-backdrop .modal,
+.modal-backdrop .dsw {
+  background: #ffffff;
+  color: #14181f;
+  border: 1px solid #cfd6de;
+  border-radius: 14px;
+  padding: 18px 20px;
+  box-shadow: 0 24px 60px rgba(16, 24, 40, .28);
+}
+
+.modal-backdrop .dsw {
+  max-height: 88vh;
+  overflow: auto;
+}
+
+.modal-backdrop input,
+.modal-backdrop textarea,
+.modal-backdrop select,
+.modal-backdrop button {
+  font: inherit;
+}
+
+.dsw .tp-row {
+  margin: 8px 0;
+}
+
+.dsw .dsw-kinds {
+  margin: 10px 0 12px;
+}
+
+/* ── vertical drag-resizers (same idea as the horizontal panel edge) ── */
+.v-resizer {
+  height: 7px;
+  margin: -2px 0 2px;
+  border-radius: 4px;
+  cursor: row-resize;
+  background: transparent;
+  position: relative;
+  flex: none;
+}
+
+.v-resizer::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  width: 44px;
+  height: 3px;
+  border-radius: 2px;
+  background: #cfd6de;
+}
+
+.v-resizer:hover::after,
+.v-resizer:active::after {
+  background: #0a6ed1;
+}
+
+.tree-host {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.tree-host .data-tree {
+  flex: 1;
+  height: auto;
+  max-height: none;
+  resize: none;
+}
+
+textarea.json-edit {
+  resize: none;
+  flex: none;
+}
+
+/* ── wizard: entity detail & 1:n relations ─────────────────────────── */
+.dsw-detail {
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: #fbfdff;
+}
+
+.dsw-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 6px;
+}
+
+.chip {
+  font-size: 10px;
+  background: #eef3fa;
+  color: #1c3d5f;
+  border-radius: 4px;
+  padding: 2px 6px;
+}
+
+.chip.more {
+  background: #f1f5f9;
+  color: #64748b;
+}
+
+.dsw-rel {
+  border-top: 1px dashed #e2e8f0;
+  padding: 8px 0 2px;
+  margin-top: 8px;
+}
+
+.dsw-rel-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.rel-path {
+  color: #7a4fb3;
+  font-weight: 600;
+}
+
+.rel-arrow {
+  color: #94a3b8;
+}
+
+/* ── table column mapping ──────────────────────────────────────────── */
+.dt-node.in-bound {
+  background: #f6f1fd;
+}
+
+.dt-node.in-bound:hover:not(:disabled) {
+  background: #ecdffb;
+}
+
+.modal-backdrop .colmap {
+  width: 380px;
+  max-width: 92vw;
+}
+
+.colmap-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  margin-top: 8px;
+  max-height: 320px;
+  overflow: auto;
+}
+
+.colmap-list button {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  text-align: left;
+  padding: 8px 10px;
+  border-radius: 8px;
+}
+
+.colmap-list button span {
+  font-size: 10px;
+  color: #64748b;
+}
+
+.colmap-list .colmap-new {
+  border-style: dashed;
+  color: #0a6ed1;
+  align-items: center;
+  flex-direction: row;
+  justify-content: center;
+}
+
+/* ── canvas table columns: clickable & selected state ──────────────── */
+th.col-click,
+td.col-click {
+  cursor: pointer;
+}
+
+th.col-click:hover,
+td.col-click:hover {
+  background: #eaf3fd;
+  box-shadow: inset 0 0 0 1px #9cc4ec;
+}
+
+th.col-sel,
+td.col-sel {
+  background: #dbeafe !important;
+  box-shadow: inset 0 0 0 2px #0a6ed1;
+  cursor: pointer;
+}
+
+/* ── universal hover highlight (same feel as the table columns) ─────── */
+.el:not(.selected) {
+  transition: box-shadow .1s ease, background-color .1s ease;
+  border-radius: 3px;
+}
+
+.el:not(.selected):hover {
+  box-shadow: 0 0 0 1.5px #9cc4ec, 0 0 0 4px rgba(10, 110, 209, .10);
+  background-color: rgba(10, 110, 209, .06);
+  cursor: pointer;
+}
+
+/* windows: a gentle frame glow + title chip emphasis, without drowning the elements inside */
+.win:not(.selected) {
+  transition: box-shadow .12s ease;
+}
+
+.win:not(.selected):hover {
+  box-shadow: inset 0 0 0 1.5px rgba(10, 110, 209, .45);
+}
+
+.win:not(.selected):hover>.win-chip,
+.win:not(.selected):hover>.chip,
+.win:not(.selected):hover>header {
+  filter: brightness(1.15);
+}
+
+/* hovering an element should win over its window's glow, so nesting reads clearly */
+.win:hover .el:hover {
+  background-color: rgba(10, 110, 209, .09);
+}

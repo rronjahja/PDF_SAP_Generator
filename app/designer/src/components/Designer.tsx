@@ -434,6 +434,21 @@ export function Designer({
       .find((w) => xPt >= w.x && xPt <= w.x + w.width && yPt >= w.y && yPt <= w.y + w.height);
 
   const [themeOpen, setThemeOpen] = useState(false);
+  const [menu, setMenu] = useState<null | 'template' | 'more'>(null);
+  const [colPick, setColPick] = useState<{ windowId: string; relPath: string } | null>(null);
+  const [colTarget, setColTarget] = useState<{ windowId: string; col: number } | null>(null);
+  useEffect(() => {
+    // deselecting the table (or selecting anything else) drops the column target
+    if (colTarget && (!selection || selection.windowId !== colTarget.windowId)) setColTarget(null);
+  }, [selection, colTarget]);
+  useEffect(() => {
+    if (!menu) return;
+    const close = (e: PointerEvent) => {
+      if (!(e.target as Element).closest?.('.menu-anchor')) setMenu(null);
+    };
+    document.addEventListener('pointerdown', close);
+    return () => document.removeEventListener('pointerdown', close);
+  }, [menu]);
   const clipboard = useRef<{ kind: 'window' | 'element'; data: LayoutWindow | LayoutElement } | null>(null);
   const stateRef = useRef(state);
   stateRef.current = state;
@@ -693,8 +708,14 @@ export function Designer({
         <button onClick={() => dispatch({ type: 'undo' })} disabled={!state.past.length || readOnly} title="Undo (Ctrl+Z)">Undo</button>
         <button onClick={() => dispatch({ type: 'redo' })} disabled={!state.future.length || readOnly} title="Redo (Ctrl+Y)">Redo</button>
         <span className="vr" />
-        <button onClick={runChecks} disabled={busy !== null}>Run checks</button>
-        <button onClick={preview} disabled={busy !== null}>Preview PDF</button>
+        <button
+          className="primary"
+          title="Validates the layout & bindings, then renders the PDF"
+          disabled={busy !== null}
+          onClick={async () => { await runChecks(); await preview(); }}
+        >
+          ▶ Preview &amp; check
+        </button>
         <span className="vr" />
         <button
           className={paint.on ? 'active-tool' : ''}
@@ -727,35 +748,45 @@ export function Designer({
           )}
         </span>
         <span className="vr" />
-        <button title="Download the layout as JSON" onClick={() => {
-          const blob = new Blob([JSON.stringify(state.layout, null, 2)], { type: 'application/json' });
-          const a = document.createElement('a');
-          a.href = URL.createObjectURL(blob);
-          a.download = `${template.name}-layout.json`;
-          a.click();
-          URL.revokeObjectURL(a.href);
-        }}>Export</button>
-        <button title="Import a layout JSON file" disabled={readOnly} onClick={() => fileInput.current?.click()}>Import</button>
-        <input ref={fileInput} type="file" accept="application/json" style={{ display: 'none' }} onChange={async (e) => {
-          const f = e.target.files?.[0];
-          if (!f) return;
-          try {
-            const l = JSON.parse(await f.text());
-            if (!l.page || !Array.isArray(l.windows)) throw new Error('not a layout file');
-            dispatch({ type: 'load', layout: l, sampleData: state.sampleData });
-            dispatch({ type: 'sync-data' });
-            notify('success', 'Layout imported', 'Review and save the draft to keep it.');
-          } catch (err) {
-            notify('error', 'Import failed', (err as Error).message);
-          } finally {
-            e.target.value = '';
-          }
-        }} />
-        <button title="Manage uploaded images" onClick={() => { setAssetTarget(null); setDialog('assets'); }}>Assets</button>
-        <button title="Lifecycle history of this version" onClick={() => setDialog('history')}>History</button>
-        <button title="Compare two versions side by side" onClick={() => setDialog('diff')} disabled={(versions.length || 0) < 2}>Compare</button>
-        <button title="How to call this template via the API" onClick={() => setModal('api')}>API</button>
-        <button title="Keyboard shortcuts" onClick={() => setModal('shortcuts')}>?</button>
+        <span className="menu-anchor">
+          <button className={menu === 'template' ? 'active-tool' : ''} onClick={() => setMenu(menu === 'template' ? null : 'template')}>Template ▾</button>
+          {menu === 'template' && <span className="menu-pop" onClick={() => setMenu(null)}>
+            <button title="Download the layout as JSON" onClick={() => {
+              const blob = new Blob([JSON.stringify(state.layout, null, 2)], { type: 'application/json' });
+              const a = document.createElement('a');
+              a.href = URL.createObjectURL(blob);
+              a.download = `${template.name}-layout.json`;
+              a.click();
+              URL.revokeObjectURL(a.href);
+            }}>⭳ Export layout</button>
+            <button title="Import a layout JSON file" disabled={readOnly} onClick={() => fileInput.current?.click()}>⭱ Import layout</button>
+            <input ref={fileInput} type="file" accept="application/json" style={{ display: 'none' }} onChange={async (e) => {
+              const f = e.target.files?.[0];
+              if (!f) return;
+              try {
+                const l = JSON.parse(await f.text());
+                if (!l.page || !Array.isArray(l.windows)) throw new Error('not a layout file');
+                dispatch({ type: 'load', layout: l, sampleData: state.sampleData });
+                dispatch({ type: 'sync-data' });
+                notify('success', 'Layout imported', 'Review and save the draft to keep it.');
+              } catch (err) {
+                notify('error', 'Import failed', (err as Error).message);
+              } finally {
+                e.target.value = '';
+              }
+            }} />
+            <button title="Manage uploaded images & fonts" onClick={() => { setAssetTarget(null); setDialog('assets'); }}>🖼 Assets</button>
+          </span>}
+        </span>
+        <span className="menu-anchor">
+          <button className={menu === 'more' ? 'active-tool' : ''} onClick={() => setMenu(menu === 'more' ? null : 'more')}>More ▾</button>
+          {menu === 'more' && <span className="menu-pop" onClick={() => setMenu(null)}>
+            <button title="Lifecycle history of this version" onClick={() => setDialog('history')}>🕘 Version history</button>
+            <button title="Compare two versions side by side" onClick={() => setDialog('diff')} disabled={(versions.length || 0) < 2}>⇄ Compare versions</button>
+            <button title="How to call this template via the API" onClick={() => setModal('api')}>⌘ API usage</button>
+            <button title="Keyboard shortcuts" onClick={() => setModal('shortcuts')}>⌨ Shortcuts</button>
+          </span>}
+        </span>
         <span className="vr" />
         {version?.status === 'REVIEW' ? (
           <>
@@ -819,6 +850,16 @@ export function Designer({
           onResizeElement={(windowId, elementId, width, height) =>
             dispatch({ type: 'update-element', windowId, elementId, patch: { width, height } })
           }
+          colTarget={colTarget}
+          onSelectColumn={(windowId, col) => {
+            setSelection({ kind: 'window', windowId });
+            setColTarget({ windowId, col });
+            const w = state.layout.windows.find((x) => x.id === windowId);
+            const c = w?.columns?.[col];
+            notify('info', `Column "${c?.label || col + 1}" selected`, w?.binding
+              ? `Click a field inside "${w.binding}" in the Data tree to map it.`
+              : 'First bind the table rows: click the array (table badge) in the Data tree.');
+          }}
           onZoomDelta={(d) => zoomTo(zoom * (d > 0 ? 0.92 : 1.08))}
           registerSheet={(el) => (sheetEl.current = el)}
         />
@@ -860,6 +901,13 @@ export function Designer({
             />
           ) : (
             <DataPanel
+              boundArray={
+                selection?.kind === 'window'
+                  ? (state.layout.windows.find((w) => w.id === selection.windowId)?.type === 'TABLE'
+                    ? state.layout.windows.find((w) => w.id === selection.windowId)?.binding ?? null
+                    : null)
+                  : null
+              }
               bindTarget={
                 selection?.kind === 'element'
                   ? `element ${selection.elementId}`
@@ -869,15 +917,38 @@ export function Designer({
               }
               onBind={(path, isArray) => {
                 if (readOnly) return;
+                const selWin = selection ? state.layout.windows.find((x) => x.id === selection.windowId) : undefined;
                 if (selection?.kind === 'element' && !isArray) {
                   dispatch({ type: 'update-element', windowId: selection.windowId, elementId: selection.elementId, patch: { binding: path } });
                   notify('success', `Bound to "${path}"`);
                 } else if (selection?.kind === 'window' && isArray) {
-                  const w = state.layout.windows.find((x) => x.id === selection.windowId);
-                  if (w?.type === 'TABLE') {
-                    dispatch({ type: 'update-window', id: w.id, patch: { binding: path } });
-                    notify('success', `Table rows bound to "${path}"`);
+                  if (selWin?.type === 'TABLE') {
+                    dispatch({ type: 'update-window', id: selWin.id, patch: { binding: path } });
+                    notify('success', `Table rows bound to "${path}"`, 'Now click the fields inside it to map each column.');
                   } else notify('info', 'Select a TABLE window to bind an array');
+                } else if (
+                  // column mapping: TABLE selected + clicked a field INSIDE its bound array
+                  selection?.kind === 'window' && selWin?.type === 'TABLE' && !isArray &&
+                  selWin.binding && path.startsWith(`${selWin.binding}.`)
+                ) {
+                  const relPath = path.slice(selWin.binding.length + 1);
+                  const cols = selWin.columns ?? [];
+                  if (colTarget && colTarget.windowId === selWin.id && cols[colTarget.col]) {
+                    // a column is selected on the canvas → map it directly, then advance
+                    dispatch({
+                      type: 'update-window', id: selWin.id,
+                      patch: { columns: cols.map((x, j) => (j === colTarget.col ? { ...x, binding: relPath } : x)) }
+                    });
+                    notify('success', `Column "${cols[colTarget.col].label || colTarget.col + 1}" → ${relPath}`);
+                    const next = cols.findIndex((x, j) => j > colTarget.col && !x.binding);
+                    setColTarget(next >= 0 ? { windowId: selWin.id, col: next } : null);
+                  } else {
+                    setColPick({ windowId: selWin.id, relPath });
+                  }
+                } else if (selection?.kind === 'window' && selWin?.type === 'TABLE' && !isArray) {
+                  notify('info', selWin.binding
+                    ? `This table reads rows from "${selWin.binding}" — click a field inside it to map a column.`
+                    : 'First click the array (table badge) to bind the table rows, then map its fields to columns.');
                 } else if (isArray) notify('info', 'Arrays bind to TABLE windows — select one first');
                 else notify('info', 'Select an element on the sheet first');
               }}
@@ -940,6 +1011,54 @@ export function Designer({
         </span>
       </div>
       <Modals modal={modal} onClose={() => setModal(null)} templateName={template.name} sampleData={state.sampleData} />
+      {colPick && (() => {
+        const w = state.layout.windows.find((x) => x.id === colPick.windowId);
+        const cols = w?.columns ?? [];
+        return (
+          <div className="modal-backdrop" onClick={() => setColPick(null)}>
+            <div className="modal colmap" onClick={(e) => e.stopPropagation()}>
+              <div className="tp-head">
+                <strong>Map <span className="mono">{colPick.relPath}</span> to a column</strong>
+                <span className="spacer" />
+                <button onClick={() => setColPick(null)}>×</button>
+              </div>
+              <p className="palette-hint">Table <b>{w?.name ?? colPick.windowId}</b> · rows from <span className="mono">{w?.binding}</span></p>
+              <div className="colmap-list">
+                {cols.map((c, i) => (
+                  <button
+                    key={i}
+                    onClick={() => {
+                      dispatch({
+                        type: 'update-window', id: colPick.windowId,
+                        patch: { columns: cols.map((x, j) => (j === i ? { ...x, binding: colPick.relPath } : x)) }
+                      });
+                      notify('success', `Column "${c.label || i + 1}" → ${colPick.relPath}`);
+                      setColPick(null);
+                    }}
+                  >
+                    <b>{c.label || `Column ${i + 1}`}</b>
+                    <span className="mono">{c.binding ? `currently: {${c.binding}}` : 'not mapped yet'}</span>
+                  </button>
+                ))}
+                <button
+                  className="colmap-new"
+                  onClick={() => {
+                    const label = colPick.relPath.split('.').pop() ?? colPick.relPath;
+                    dispatch({
+                      type: 'update-window', id: colPick.windowId,
+                      patch: { columns: [...cols, { label, binding: colPick.relPath, width: 80 }] }
+                    });
+                    notify('success', `New column "${label}" → ${colPick.relPath}`);
+                    setColPick(null);
+                  }}
+                >
+                  ＋ Add as a new column
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
       {dialog === 'assets' && (
         <AssetsModal
           onClose={() => { setDialog(null); setAssetTarget(null); }}

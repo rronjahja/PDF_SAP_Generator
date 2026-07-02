@@ -14,6 +14,17 @@ export function PreviewPane({
 }) {
   const [html, setHtml] = useState('');
   const [zoom, setZoom] = useState(34);
+  const [fit, setFit] = useState(true);
+  const frameRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!fit || !frameRef.current) return;
+    const el = frameRef.current;
+    const compute = () => setZoom(Math.max(15, Math.min(200, Math.floor(((el.clientWidth - 20) / 595) * 100))));
+    compute();
+    const ro = new ResizeObserver(compute);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fit]);
   const [pages, setPages] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -54,14 +65,16 @@ export function PreviewPane({
         <span>Live preview{pages ? ` · ${pages} page${pages === 1 ? '' : 's'}` : ''}</span>
         <span className="spacer" />
         <span className="zoom-ctl">
-          <button title="Zoom out" onClick={() => setZoom((z) => Math.max(20, z - 15))}>−</button>
-          <button title="Fit to panel" onClick={() => setZoom(34)}>{zoom}%</button>
-          <button title="Zoom in" onClick={() => setZoom((z) => Math.min(200, z + 15))}>+</button>
+          <button title="Zoom out" onClick={() => { setFit(false); setZoom((z) => Math.max(15, z - 15)); }}>−</button>
+          <button title={fit ? 'Fitted to the panel — resize it and the PDF follows' : 'Click to fit the panel width'} className={fit ? 'active-tool' : ''} onClick={() => setFit(true)}>{fit ? `fit · ${zoom}%` : `${zoom}%`}</button>
+          <button title="Zoom in" onClick={() => { setFit(false); setZoom((z) => Math.min(200, z + 15)); }}>+</button>
         </span>
         <span className={`live-dot${pending ? ' busy' : ''}`} title={pending ? 'Rendering…' : 'Up to date'} />
       </div>
       {error && <p className="issue error">{error}</p>}
-      <iframe title="preview" className="preview-frame" srcDoc={html} sandbox="allow-same-origin" />
+      <div className="preview-scroll" ref={frameRef}>
+        <iframe title="preview" className="preview-frame" srcDoc={html} sandbox="allow-same-origin" />
+      </div>
       <p className="panel-hint">Updates ~1s after each change. QR codes, barcodes, growing tables, and translations all render here exactly as in the PDF.</p>
     </div>
   );

@@ -1,7 +1,14 @@
 import type { Dispatch } from 'react';
 import { useState } from 'react';
 import type { ClientIssue, EditorAction } from '../state';
+import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { DataSourceWizard } from './DataSourceWizard';
+
+/** Small ⓘ that shows help on hover — keeps the panel clean. */
+function Info({ tip }: { tip: string }) {
+  return <span className="info" data-tip={tip} tabIndex={0}>ⓘ</span>;
+}
 
 /** "Did you mean …?" — closest existing path for a missing binding. */
 function suggestFor(missingPath: string, sampleData: string): string | null {
@@ -59,22 +66,24 @@ function ConnectSourceButton({ readOnly, dispatch }: { readOnly: boolean; dispat
       <button className="linkish" disabled={readOnly} title="Connect SAP OData, CDS, an API, or paste a CPI/JSON payload — generates a bindable sample" onClick={() => setOpen(true)}>
         ⚡ Connect source
       </button>
-      {open && (
+      {open && createPortal(
         <DataSourceWizard
           onClose={() => setOpen(false)}
           onApply={(json) => {
             dispatch({ type: 'set-sample', sampleData: json });
             setOpen(false);
           }}
-        />
+        />,
+        document.body
       )}
     </>
   );
 }
 
-function DataTree({ sampleData, bindTarget, onBind }: {
+function DataTree({ sampleData, bindTarget, boundArray, onBind }: {
   sampleData: string;
   bindTarget: string | null;
+  boundArray?: string | null;
   onBind: (path: string, isArray: boolean) => void;
 }) {
   let data: unknown = null;
@@ -85,14 +94,16 @@ function DataTree({ sampleData, bindTarget, onBind }: {
   return (
     <div className="data-tree">
       <div className="dt-hint">
-        {bindTarget
-          ? <>Click a field to bind it to <span className="mono">{bindTarget}</span></>
-          : 'Select an element (or a table window) on the sheet, then click a field here to bind it.'}
+        {boundArray
+          ? <>Table rows come from <span className="mono">{boundArray}</span> — click a field inside it to <b>map a column</b>.</>
+          : bindTarget
+            ? <>Click a field to bind it to <span className="mono">{bindTarget}</span></>
+            : 'Select an element (or a table window) on the sheet, then click a field here to bind it.'}
       </div>
       {nodes.map((n) => (
         <button
           key={n.path}
-          className={`dt-node ${n.kind}`}
+          className={`dt-node ${n.kind}${boundArray && (n.path === boundArray || n.path.startsWith(boundArray + '.')) ? ' in-bound' : ''}`}
           style={{ paddingLeft: 8 + n.depth * 12 }}
           disabled={n.kind === 'object'}
           title={n.kind === 'array' ? `Bind table rows to ${n.path}` : n.kind === 'value' ? `Bind to ${n.path}` : undefined}
@@ -121,6 +132,7 @@ export function DataPanel({
   onDeleteDataset,
   onSelectWindow,
   bindTarget,
+  boundArray,
   onBind
 }: {
   sampleData: string;
@@ -136,9 +148,31 @@ export function DataPanel({
   onDeleteDataset: (name: string) => void;
   onSelectWindow: (windowId: string) => void;
   bindTarget?: string | null;
+  boundArray?: string | null;
   onBind?: (path: string, isArray: boolean) => void;
 }) {
   const names = Array.from(new Set(['default', ...Object.keys(datasets)]));
+  // vertical drag-resize for the field tree and the JSON editor (independent heights)
+  const [treeH, setTreeH] = useState(190);
+  const [jsonH, setJsonH] = useState(150);
+  const vDrag = useRef<{ key: 'tree' | 'json'; y: number; h: number } | null>(null);
+  useEffect(() => {
+    const move = (e: PointerEvent) => {
+      const d = vDrag.current;
+      if (!d) return;
+      const h = Math.max(70, Math.min(window.innerHeight * 0.7, d.h + (e.clientY - d.y)));
+      if (d.key === 'tree') setTreeH(h); else setJsonH(h);
+    };
+    const up = () => { vDrag.current = null; document.body.style.cursor = ''; };
+    window.addEventListener('pointermove', move);
+    window.addEventListener('pointerup', up);
+    return () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up); };
+  }, []);
+  const startVDrag = (key: 'tree' | 'json', h: number) => (e: React.PointerEvent) => {
+    vDrag.current = { key, y: e.clientY, h };
+    document.body.style.cursor = 'row-resize';
+    e.preventDefault();
+  };
   let jsonOk = true;
   try {
     if (sampleData.trim()) JSON.parse(sampleData);
@@ -158,6 +192,7 @@ export function DataPanel({
     <div className="data-panel">
       <div className="cols-head">
         <span>Test dataset</span>
+        <Info tip="Keep several payload variants (happy path, edge cases, empty) and switch between them while designing." />
         <span />
       </div>
       <div className="dataset-bar">
@@ -173,30 +208,38 @@ export function DataPanel({
         )}
       </div>
       <div className="cols-head">
-        <span>Sample data (JSON)</span>
+        <span>Fields &amp; sample data</span>
+        <Info tip="Entries appear automatically when you add bound elements; rename a binding and its entry moves with it. Or connect a real source to generate the payload." />
+        <span className="spacer" />
         <ConnectSourceButton readOnly={readOnly} dispatch={dispatch} />
-        <button className="linkish" onClick={formatJson} disabled={readOnly || !jsonOk}>
-          Format
-        </button>
       </div>
-      <p className="panel-hint">
-        Entries appear here automatically when you add bound elements. Rename a binding in
-        Properties and its entry moves with it.
-      </p>
-      {onBind && <DataTree sampleData={sampleData} bindTarget={bindTarget ?? null} onBind={onBind} />}
+      {onBind && (
+        <>
+          <div style={{ height: treeH, minHeight: 70 }} className="tree-host">
+            <DataTree sampleData={sampleData} bindTarget={bindTarget ?? null} boundArray={boundArray ?? null} onBind={onBind} />
+          </div>
+          <div className="v-resizer" title="Drag to resize the field tree" onPointerDown={startVDrag('tree', treeH)} />
+        </>
+      )}
+      <div className="cols-head sub">
+        <span>Raw JSON</span>
+        <Info tip="The payload your template renders with. Drag the grip below the box to make it taller." />
+        <span className="spacer" />
+        <button className="linkish" onClick={formatJson} disabled={readOnly || !jsonOk}>Format</button>
+        <button className="linkish" disabled={readOnly || !jsonOk} title="Adds an entry for every bound element that has no value yet" onClick={() => dispatch({ type: 'sync-data' })}>+ missing entries</button>
+      </div>
       <textarea
-        className={`mono${jsonOk ? '' : ' invalid'}`}
+        className={`mono json-edit${jsonOk ? '' : ' invalid'}`}
+        style={{ height: jsonH }}
         spellCheck={false}
         value={sampleData}
         readOnly={readOnly}
         onChange={(e) => dispatch({ type: 'set-sample', sampleData: e.target.value })}
       />
+      <div className="v-resizer" title="Drag to resize the JSON editor" onPointerDown={startVDrag('json', jsonH)} />
       {!jsonOk && <p className="issue error">Not valid JSON yet.</p>}
-      <button disabled={readOnly || !jsonOk} onClick={() => dispatch({ type: 'sync-data' })}>
-        Add missing entries from layout
-      </button>
 
-      <div className="cols-head"><span>Preview locale</span></div>
+      <div className="cols-head"><span>Preview locale</span><Info tip="Formats dates, numbers and currencies in the live preview and picks the matching template translations." /></div>
       <select value={locale} onChange={(e) => onLocale(e.target.value)}>
         <option value="de-DE">de-DE (German)</option>
         <option value="en-US">en-US (English)</option>
@@ -205,8 +248,8 @@ export function DataPanel({
         <option value="es-ES">es-ES (Spanish)</option>
       </select>
 
-      <div className="cols-head"><span>Checks</span></div>
-      {issues === null && <p className="muted">Run checks to validate the layout and bindings against this data.</p>}
+      <div className="cols-head"><span>Checks</span><Info tip="▶ Preview & check validates the layout and every binding against this data. Warnings suggest the closest matching field." /></div>
+      {issues === null && <p className="muted">No checks run yet — hit ▶ Preview &amp; check in the toolbar.</p>}
       {issues?.length === 0 && <p className="issue ok">All bindings resolve. Layout is valid.</p>}
       {issues?.map((i, n) => {
         const missing = /['"]([A-Za-z0-9_.[\]]+)['"]/.exec(i.text);

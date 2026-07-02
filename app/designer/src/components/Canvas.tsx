@@ -313,7 +313,9 @@ function WindowView({
   onSelect,
   onInspect,
   onResizeStart,
-  onResizeElStart
+  onResizeElStart,
+  selectedCol,
+  onSelectColumn
 }: {
   win: LayoutWindow;
   zoom: number;
@@ -324,6 +326,8 @@ function WindowView({
   onInspect: (sel: Selection) => void;
   onResizeStart: (e: React.PointerEvent, win: LayoutWindow) => void;
   onResizeElStart: (e: React.PointerEvent, win: LayoutWindow, el: LayoutElement) => void;
+  selectedCol: number | null;
+  onSelectColumn: (windowId: string, col: number) => void;
 }) {
   const selected = selection?.windowId === win.id && selection.kind === 'window';
   const lastDown = useRef(0);
@@ -378,7 +382,13 @@ function WindowView({
             <thead>
               <tr>
                 {(win.columns ?? []).map((c, i) => (
-                  <th key={i} style={{ width: c.width * zoom }}>
+                  <th
+                    key={i}
+                    style={{ width: c.width * zoom }}
+                    className={selectedCol === i ? 'col-sel' : 'col-click'}
+                    title="Click to select this column, then click a field in the Data tree to map it"
+                    onClick={(e) => { e.stopPropagation(); onSelectColumn(win.id, i); }}
+                  >
                     {c.label}
                   </th>
                 ))}
@@ -387,7 +397,12 @@ function WindowView({
             <tbody>
               <tr>
                 {(win.columns ?? []).map((c, i) => (
-                  <td key={i} style={{ textAlign: c.align }}>{`{${c.binding}}`}</td>
+                  <td
+                    key={i}
+                    style={{ textAlign: c.align }}
+                    className={selectedCol === i ? 'col-sel' : 'col-click'}
+                    onClick={(e) => { e.stopPropagation(); onSelectColumn(win.id, i); }}
+                  >{c.binding ? `{${c.binding}}` : '—'}</td>
                 ))}
               </tr>
             </tbody>
@@ -437,6 +452,8 @@ export function Canvas({
   onInspect,
   onResize,
   onResizeElement,
+  colTarget,
+  onSelectColumn,
   onZoomDelta,
   registerSheet
 }: {
@@ -453,6 +470,8 @@ export function Canvas({
   onInspect: (sel: Selection) => void;
   onResize: (windowId: string, width: number, height: number) => void;
   onResizeElement: (windowId: string, elementId: string, width: number, height: number) => void;
+  colTarget: { windowId: string; col: number } | null;
+  onSelectColumn: (windowId: string, col: number) => void;
   onZoomDelta: (deltaY: number) => void;
   registerSheet: (el: HTMLDivElement | null) => void;
 }) {
@@ -549,6 +568,8 @@ export function Canvas({
               <WindowView
                 theme={layout.theme}
                 onResizeElStart={onResizeElStart}
+                selectedCol={colTarget && colTarget.windowId === w.id ? colTarget.col : null}
+                onSelectColumn={onSelectColumn}
                 key={w.id}
                 win={w}
                 zoom={zoom}

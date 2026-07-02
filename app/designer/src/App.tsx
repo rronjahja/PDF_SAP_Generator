@@ -93,8 +93,8 @@ function TemplateList({
     <div className="list-page">
       <div className="list-head">
         <div style={{ flex: 1 }}>
-          <h1>Form templates</h1>
-          <p className="sub">Design a layout, bind your data, publish, generate PDFs.</p>
+          <h1>Templates</h1>
+          <p className="sub">Design once — bind SAP data, apply business rules, generate &amp; deliver signed, interactive PDFs.</p>
         </div>
       </div>
 
@@ -208,7 +208,7 @@ export default function App() {
         <>
           <div className="toolbar">
             <span className="brand">
-              PDF Form Designer <span className="pt">A4 · 595×842pt</span>
+              <span className="brand-mark">▤</span> Formalize <span className="pt">PDF document studio</span>
             </span>
             <span className="spacer" />
             <button onClick={() => setView({ page: 'documents' })}>Documents</button>
